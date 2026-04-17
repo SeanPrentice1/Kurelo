@@ -168,6 +168,13 @@ p { color: var(--text-sub); line-height: 1.75; }
   display: block;
 }
 
+.hero-logo {
+  height: 120px;
+  width: auto;
+  margin: 0 auto 32px;
+  filter: drop-shadow(0 0 40px rgba(123, 79, 255, 0.4));
+}
+
 .nav-links {
   display: flex;
   align-items: center;
