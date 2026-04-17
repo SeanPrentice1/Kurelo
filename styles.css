@@ -173,6 +173,12 @@ p { color: var(--text-sub); line-height: 1.75; }
   width: auto;
   margin: 0 auto 32px;
   filter: drop-shadow(0 0 40px rgba(123, 79, 255, 0.4));
+  animation: heroSpin 20s linear infinite;
+}
+
+@keyframes heroSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 .nav-links {
