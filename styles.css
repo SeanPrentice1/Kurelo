@@ -162,13 +162,10 @@ p { color: var(--text-sub); line-height: 1.75; }
   white-space: nowrap;
 }
 
-.logo-mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: linear-gradient(135deg, var(--kurelo), var(--crevaxo));
-  box-shadow: 0 0 12px rgba(123, 79, 255, 0.5);
-  flex-shrink: 0;
+.logo-img {
+  height: 40px;
+  width: auto;
+  display: block;
 }
 
 .nav-links {
