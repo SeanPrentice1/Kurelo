@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kurelo - Where Products Are Born</title>
+  <meta name="description" content="Kurelo is an independent product studio crafting focused, powerful software for the modern world." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=2" />
+</head>
+<body>
+
+  <!-- ─── NAV ─── -->
+  <nav id="nav">
+    <div class="nav-inner">
+      <a href="#hero" class="logo">
+        <span class="logo-mark"></span>
+        Kurelo
+      </a>
+      <div class="nav-links">
+        <a href="#about">About</a>
+        <a href="#products">Products</a>
+        <a href="#contact">Contact</a>
+      </div>
+      <a href="#contact" class="btn btn-sm">Get in touch</a>
+    </div>
+  </nav>
+
+  <!-- ─── HERO ─── -->
+  <section id="hero">
+    <canvas id="particles"></canvas>
+
+    <div class="hero-glows" aria-hidden="true">
+      <div class="glow glow-violet"></div>
+      <div class="glow glow-orange"></div>
+      <div class="glow glow-teal"></div>
+    </div>
+
+    <div class="grid-overlay" aria-hidden="true"></div>
+
+    <div class="hero-content reveal">
+      <div class="eyebrow">
+        <span class="eyebrow-dot"></span>
+        Product Studio
+      </div>
+      <h1>
+        Building software<br />
+        <span class="gradient-text">people love</span>
+      </h1>
+      <p class="hero-sub">
+        Kurelo is an independent studio crafting focused,<br class="br-desk" />
+        powerful tools for the modern world.
+      </p>
+      <div class="hero-ctas">
+        <a href="#products" class="btn btn-primary">Explore Products</a>
+        <a href="#about" class="btn btn-ghost">Our story →</a>
+      </div>
+    </div>
+
+    <div class="scroll-hint" aria-hidden="true">
+      <div class="scroll-line"></div>
+    </div>
+  </section>
+
+  <!-- ─── ABOUT ─── -->
+  <section id="about">
+    <div class="section-inner">
+      <div class="about-grid">
+        <div class="about-left fade-in">
+          <div class="section-label">About Kurelo</div>
+          <h2>Craft over chaos.<br />Focus over features.</h2>
+        </div>
+        <div class="about-right fade-in" style="--delay: 0.15s">
+          <p>
+            We believe the best tools do one thing exceptionally well. Kurelo is the roof under which we build,
+            iterate, and ship opinionated products - each one designed with intention and built to last.
+          </p>
+          <p>
+            No bloat, no compromise. Just software that gets out of your way and helps you move faster.
+          </p>
+          <div class="pillars">
+            <div class="pillar">
+              <div class="pillar-icon">◈</div>
+              <div>
+                <strong>Focus</strong>
+                <span>One job, done perfectly</span>
+              </div>
+            </div>
+            <div class="pillar">
+              <div class="pillar-icon">◈</div>
+              <div>
+                <strong>Craft</strong>
+                <span>Details make the difference</span>
+              </div>
+            </div>
+            <div class="pillar">
+              <div class="pillar-icon">◈</div>
+              <div>
+                <strong>Speed</strong>
+                <span>Ship early, iterate fast</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── PRODUCTS ─── -->
+  <section id="products">
+    <div class="section-inner">
+      <div class="section-header fade-in">
+        <div class="section-label">What we've built</div>
+        <h2>Our products</h2>
+      </div>
+
+      <div class="products-grid">
+
+        <!-- Crevaxo -->
+        <a href="#" class="product-card card-crevaxo fade-in" style="--delay: 0.1s" aria-label="Crevaxo product">
+          <div class="card-glow"></div>
+          <div class="card-header">
+            <div class="product-badge" style="--product-color: #F97316">Crevaxo</div>
+            <div class="card-arrow">↗</div>
+          </div>
+          <h3>Crevaxo</h3>
+          <p>Powerful, opinionated tooling built for teams who move fast and ship often. Streamline your workflow without sacrificing flexibility.</p>
+          <div class="card-footer">
+            <span class="card-tag">Live</span>
+            <div class="card-dot" style="background: #F97316"></div>
+          </div>
+        </a>
+
+        <!-- Rostura -->
+        <a href="#" class="product-card card-rostura fade-in" style="--delay: 0.2s" aria-label="Rostura product">
+          <div class="card-glow"></div>
+          <div class="card-header">
+            <div class="product-badge" style="--product-color: #0D9B8A">Rostura</div>
+            <div class="card-arrow">↗</div>
+          </div>
+          <h3>Rostura</h3>
+          <p>Precision data and analytics for the people who need answers fast. Beautiful dashboards that surface what actually matters.</p>
+          <div class="card-footer">
+            <span class="card-tag">Live</span>
+            <div class="card-dot" style="background: #0D9B8A"></div>
+          </div>
+        </a>
+
+        <!-- Coming soon -->
+        <div class="product-card card-soon fade-in" style="--delay: 0.3s">
+          <div class="card-header">
+            <div class="product-badge" style="--product-color: #7B4FFF">Next</div>
+          </div>
+          <h3>Something new<br />is brewing</h3>
+          <p>We're working on our next tool. Follow along to be the first to know when it launches.</p>
+          <div class="card-footer">
+            <span class="card-tag card-tag-soon">In progress</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── CONTACT ─── -->
+  <section id="contact">
+    <div class="section-inner">
+      <div class="contact-grid">
+        <div class="contact-left fade-in">
+          <div class="section-label">Contact</div>
+          <h2>Let's build<br />something great.</h2>
+          <p>Have an idea, a question, or want to work with us? We'd love to hear from you.</p>
+          <div class="contact-links">
+            <a href="mailto:hello@kurelo.com" class="contact-link">
+              <span class="contact-link-icon">✉</span>
+              hello@kurelo.com
+            </a>
+          </div>
+        </div>
+
+        <form class="contact-form fade-in" style="--delay: 0.15s" onsubmit="handleSubmit(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="name">Name</label>
+              <input type="text" id="name" name="name" placeholder="Your name" required />
+            </div>
+            <div class="form-group">
+              <label for="email">Email</label>
+              <input type="email" id="email" name="email" placeholder="you@example.com" required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="subject">Subject</label>
+            <input type="text" id="subject" name="subject" placeholder="What's this about?" />
+          </div>
+          <div class="form-group">
+            <label for="message">Message</label>
+            <textarea id="message" name="message" rows="5" placeholder="Tell us more..." required></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Send message</button>
+          <div id="form-success" class="form-success" hidden>
+            Message sent - we'll be in touch soon!
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── FOOTER ─── -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-left">
+        <a href="#hero" class="logo footer-logo">
+          <span class="logo-mark"></span>
+          Kurelo
+        </a>
+        <p>An independent product studio.</p>
+      </div>
+      <div class="footer-links">
+        <div class="footer-col">
+          <span class="footer-heading">Products</span>
+          <a href="#">Crevaxo</a>
+          <a href="#">Rostura</a>
+        </div>
+        <div class="footer-col">
+          <span class="footer-heading">Company</span>
+          <a href="#about">About</a>
+          <a href="#contact">Contact</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Kurelo. All rights reserved.</span>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
