@@ -448,9 +448,9 @@ body {
 
 /* ── Analytics ── */
 .analytics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .analytics-card {
@@ -576,7 +576,7 @@ body {
 
 .map-container {
   width: 100%;
-  height: 180px;
+  height: 360px;
   border-radius: 8px;
   overflow: hidden;
 }
