@@ -217,6 +217,9 @@ function renderGeoMap(appId, countryValues, countryList) {
     return
   }
 
+  // Defer init so the browser has finished laying out the container
+  // before jsvectormap reads its dimensions
+  requestAnimationFrame(() => {
   _maps[appId] = new jsVectorMap({
     selector: `#map-${appId}`,
     map: 'world',
@@ -239,11 +242,13 @@ function renderGeoMap(appId, countryValues, countryList) {
       if (val) tooltip.text(`${tooltip.text()} — ${fmt(val)} views`)
     },
   })
+  }) // end requestAnimationFrame
 
   // Country table below map
   const listEl = document.getElementById(`country-${appId}`)
   if (!listEl || !countryList.length) return
 
+  const barColor = isOrange ? 'var(--crevaxo)' : 'var(--rostura)'
   const max = countryList[0].pageviews
   listEl.innerHTML = countryList.slice(0, 8).map(c => {
     const flag = c.code.toUpperCase().replace(/./g, ch =>
@@ -254,7 +259,7 @@ function renderGeoMap(appId, countryValues, countryList) {
       <div class="country-row">
         <span class="country-flag">${flag}</span>
         <span class="country-name">${escHtml(c.name)}</span>
-        <div class="tp-bar-wrap"><div class="tp-bar" style="width:${pct}%"></div></div>
+        <div class="tp-bar-wrap"><div class="tp-bar" style="width:${pct}%;background:${barColor}"></div></div>
         <span class="tp-views">${fmt(c.pageviews)}</span>
       </div>
     `
