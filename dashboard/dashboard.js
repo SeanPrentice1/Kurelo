@@ -210,7 +210,7 @@ function renderGeoMap(appId, countryValues, countryList) {
 
   const isOrange = appId === 'crevaxo'
   const scaleHigh = isOrange ? '#f97316' : '#14b8a6'
-  const scaleLow  = isOrange ? '#3d1500' : '#002b26'
+  const scaleLow  = isOrange ? '#150800' : '#001a17'
 
   if (typeof jsVectorMap === 'undefined' || !Object.keys(countryValues).length) {
     container.innerHTML = '<span style="color:var(--text-faint);font-size:12px;padding:8px 0;display:block">No geographic data</span>'
@@ -225,7 +225,7 @@ function renderGeoMap(appId, countryValues, countryList) {
     backgroundColor: 'transparent',
     regionStyle: {
       initial: { fill: '#1e1e1e', stroke: '#111', strokeWidth: 0.4 },
-      hover:   { fill: isOrange ? '#f9731644' : '#14b8a644', cursor: 'default' },
+      hover:   { fill: isOrange ? 'rgba(249,115,22,0.3)' : 'rgba(20,184,166,0.3)', cursor: 'default' },
     },
     series: {
       regions: [{
