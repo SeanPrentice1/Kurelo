@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/dashboard/dashboard.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/css/jsvectormap.min.css" />
 </head>
 <body>
 
@@ -204,6 +205,11 @@
           <div class="sparkline-wrap">
             <canvas class="sparkline" id="spark-crevaxo" width="300" height="48"></canvas>
           </div>
+          <div class="map-section">
+            <div class="top-pages-title">Users by country</div>
+            <div class="map-container" id="map-crevaxo"></div>
+            <div class="country-list" id="country-crevaxo"></div>
+          </div>
         </div>
 
         <!-- Rostura analytics -->
@@ -232,12 +238,19 @@
           <div class="sparkline-wrap">
             <canvas class="sparkline" id="spark-rostura" width="300" height="48"></canvas>
           </div>
+          <div class="map-section">
+            <div class="top-pages-title">Users by country</div>
+            <div class="map-container" id="map-rostura"></div>
+            <div class="country-list" id="country-rostura"></div>
+          </div>
         </div>
       </div>
     </section>
 
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/js/jsvectormap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/maps/world.js"></script>
   <script src="/dashboard/dashboard.js"></script>
 </body>
 </html>

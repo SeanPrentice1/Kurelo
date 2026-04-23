@@ -191,6 +191,74 @@ function renderAppAnalytics(appId, d) {
 
   // Sparkline
   drawSparkline(`spark-${appId}`, d.dailyTrend || [], appId)
+  renderGeoMap(appId, d.countryValues || {}, d.countryList || [])
+}
+
+// ── Geo map ────────────────────────────────────────────────────────────────
+
+const _maps = {}
+
+function renderGeoMap(appId, countryValues, countryList) {
+  const container = document.getElementById(`map-${appId}`)
+  if (!container) return
+
+  // Destroy previous instance on refresh
+  if (_maps[appId]) {
+    try { _maps[appId].destroy() } catch (_) {}
+    container.innerHTML = ''
+  }
+
+  const isOrange = appId === 'crevaxo'
+  const scaleHigh = isOrange ? '#f97316' : '#14b8a6'
+  const scaleLow  = isOrange ? '#3d1500' : '#002b26'
+
+  if (typeof jsVectorMap === 'undefined' || !Object.keys(countryValues).length) {
+    container.innerHTML = '<span style="color:var(--text-faint);font-size:12px;padding:8px 0;display:block">No geographic data</span>'
+    return
+  }
+
+  _maps[appId] = new jsVectorMap({
+    selector: `#map-${appId}`,
+    map: 'world',
+    zoomOnScroll: false,
+    zoomButtons: false,
+    backgroundColor: 'transparent',
+    regionStyle: {
+      initial: { fill: '#1e1e1e', stroke: '#111', strokeWidth: 0.4 },
+      hover:   { fill: isOrange ? '#f9731644' : '#14b8a644', cursor: 'default' },
+    },
+    series: {
+      regions: [{
+        values: countryValues,
+        scale: [scaleLow, scaleHigh],
+        normalizeFunction: 'polynomial',
+      }],
+    },
+    onRegionTooltipShow(event, tooltip, code) {
+      const val = countryValues[code]
+      if (val) tooltip.text(`${tooltip.text()} — ${fmt(val)} views`)
+    },
+  })
+
+  // Country table below map
+  const listEl = document.getElementById(`country-${appId}`)
+  if (!listEl || !countryList.length) return
+
+  const max = countryList[0].pageviews
+  listEl.innerHTML = countryList.slice(0, 8).map(c => {
+    const flag = c.code.toUpperCase().replace(/./g, ch =>
+      String.fromCodePoint(127397 + ch.charCodeAt(0))
+    )
+    const pct = max > 0 ? Math.round((c.pageviews / max) * 100) : 0
+    return `
+      <div class="country-row">
+        <span class="country-flag">${flag}</span>
+        <span class="country-name">${escHtml(c.name)}</span>
+        <div class="tp-bar-wrap"><div class="tp-bar" style="width:${pct}%"></div></div>
+        <span class="tp-views">${fmt(c.pageviews)}</span>
+      </div>
+    `
+  }).join('')
 }
 
 function drawSparkline(canvasId, trend, appId) {

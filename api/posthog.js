@@ -23,51 +23,75 @@ async function hogql(projectId, apiKey, query) {
 async function queryProject(projectId, apiKey) {
   if (!projectId) return null
 
-  const summaryRes = await hogql(
-    projectId,
-    apiKey,
-    `SELECT
-       countIf(event = '$pageview')                                AS pageviews,
-       uniq(distinct_id)                                          AS unique_visitors,
-       uniq(properties.$session_id)                               AS sessions
-     FROM events
-     WHERE timestamp >= now() - INTERVAL 7 DAY`
-  )
-
-  const trendRes = await hogql(
-    projectId,
-    apiKey,
-    `SELECT
-       toDate(timestamp) AS day,
-       countIf(event = '$pageview') AS pageviews
-     FROM events
-     WHERE timestamp >= now() - INTERVAL 14 DAY
-     GROUP BY day
-     ORDER BY day ASC`
-  )
-
-  const topPagesRes = await hogql(
-    projectId,
-    apiKey,
-    `SELECT
-       properties.$current_url AS url,
-       count()                 AS views
-     FROM events
-     WHERE event = '$pageview'
-       AND timestamp >= now() - INTERVAL 7 DAY
-     GROUP BY url
-     ORDER BY views DESC
-     LIMIT 5`
-  )
+  const [summaryRes, trendRes, topPagesRes, geoRes] = await Promise.all([
+    hogql(
+      projectId, apiKey,
+      `SELECT
+         countIf(event = '$pageview')   AS pageviews,
+         uniq(distinct_id)             AS unique_visitors,
+         uniq(properties.$session_id)  AS sessions
+       FROM events
+       WHERE timestamp >= now() - INTERVAL 7 DAY`
+    ),
+    hogql(
+      projectId, apiKey,
+      `SELECT
+         toDate(timestamp)              AS day,
+         countIf(event = '$pageview')   AS pageviews
+       FROM events
+       WHERE timestamp >= now() - INTERVAL 14 DAY
+       GROUP BY day
+       ORDER BY day ASC`
+    ),
+    hogql(
+      projectId, apiKey,
+      `SELECT
+         properties.$current_url AS url,
+         count()                 AS views
+       FROM events
+       WHERE event = '$pageview'
+         AND timestamp >= now() - INTERVAL 7 DAY
+       GROUP BY url
+       ORDER BY views DESC
+       LIMIT 5`
+    ),
+    hogql(
+      projectId, apiKey,
+      `SELECT
+         properties.$geoip_country_code AS code,
+         properties.$geoip_country_name AS country,
+         count()                        AS pageviews
+       FROM events
+       WHERE event = '$pageview'
+         AND timestamp >= now() - INTERVAL 7 DAY
+         AND properties.$geoip_country_code IS NOT NULL
+         AND properties.$geoip_country_code != ''
+       GROUP BY code, country
+       ORDER BY pageviews DESC
+       LIMIT 30`
+    ),
+  ])
 
   const row = summaryRes.results?.[0] || [0, 0, 0]
+
+  // Build country map: { 'AU': 1234, 'US': 500, ... }
+  const countryValues = {}
+  const countryList = []
+  for (const r of (geoRes.results || [])) {
+    if (r[0]) {
+      countryValues[r[0]] = Number(r[2]) || 0
+      countryList.push({ code: r[0], name: r[1] || r[0], pageviews: Number(r[2]) || 0 })
+    }
+  }
 
   return {
     pageviews7d:      Number(row[0]) || 0,
     uniqueVisitors7d: Number(row[1]) || 0,
     sessions7d:       Number(row[2]) || 0,
-    dailyTrend: (trendRes.results || []).map(r => ({ day: r[0], pageviews: Number(r[1]) || 0 })),
-    topPages:   (topPagesRes.results || []).map(r => ({ url: r[0], views: Number(r[1]) || 0 })),
+    dailyTrend:    (trendRes.results || []).map(r => ({ day: r[0], pageviews: Number(r[1]) || 0 })),
+    topPages:      (topPagesRes.results || []).map(r => ({ url: r[0], views: Number(r[1]) || 0 })),
+    countryValues,
+    countryList,
   }
 }
 
