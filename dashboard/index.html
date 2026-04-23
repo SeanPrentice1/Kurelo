@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kurelo Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/dashboard/dashboard.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <svg class="header-logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 8 L15 16 L8 24" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M16 8 L23 16 L16 24" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+      </svg>
+      <span class="header-title">Kurelo <span class="header-sub">Dashboard</span></span>
+    </div>
+    <div class="header-right">
+      <div class="global-status" id="global-status">
+        <span class="status-dot"></span>
+        <span class="status-label">Checking…</span>
+      </div>
+      <span class="last-updated" id="last-updated">—</span>
+      <button class="refresh-btn" id="refresh-btn" title="Refresh now">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
+        Refresh
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- ── App Health ── -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">App Health</h2>
+        <span class="section-meta" id="health-checked-at"></span>
+      </div>
+      <div class="health-grid" id="health-grid">
+        <!-- Crevaxo -->
+        <div class="health-card skeleton" id="health-crevaxo">
+          <div class="health-card-top">
+            <div class="app-badge crevaxo">Crevaxo</div>
+            <div class="status-pill loading" id="pill-crevaxo">
+              <span class="pill-dot"></span>
+              <span class="pill-label">—</span>
+            </div>
+          </div>
+          <div class="health-url" id="url-crevaxo">crevaxo.com</div>
+          <div class="health-metrics">
+            <div class="hm">
+              <span class="hm-val" id="latency-crevaxo">—</span>
+              <span class="hm-label">Latency</span>
+            </div>
+            <div class="hm">
+              <span class="hm-val" id="code-crevaxo">—</span>
+              <span class="hm-label">Status</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rostura -->
+        <div class="health-card skeleton" id="health-rostura">
+          <div class="health-card-top">
+            <div class="app-badge rostura">Rostura</div>
+            <div class="status-pill loading" id="pill-rostura">
+              <span class="pill-dot"></span>
+              <span class="pill-label">—</span>
+            </div>
+          </div>
+          <div class="health-url" id="url-rostura">rostura.com</div>
+          <div class="health-metrics">
+            <div class="hm">
+              <span class="hm-val" id="latency-rostura">—</span>
+              <span class="hm-label">Latency</span>
+            </div>
+            <div class="hm">
+              <span class="hm-val" id="code-rostura">—</span>
+              <span class="hm-label">Status</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Placeholder for future app -->
+        <div class="health-card add-app-card">
+          <div class="add-app-inner">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="16"/>
+              <line x1="8" y1="12" x2="16" y2="12"/>
+            </svg>
+            <span>Add app</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Stripe Revenue ── -->
+    <section class="section" id="stripe-section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.5">
+            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+          </svg>
+          Revenue
+        </h2>
+        <span class="section-meta" id="stripe-note"></span>
+      </div>
+
+      <!-- Stripe not configured -->
+      <div class="not-configured" id="stripe-unconfigured" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Set <code>STRIPE_SECRET_KEY</code> in Vercel environment variables to enable revenue data.
+      </div>
+
+      <div id="stripe-content">
+        <div class="metrics-row">
+          <div class="metric-card skeleton">
+            <span class="metric-val" id="stripe-mrr">—</span>
+            <span class="metric-label">MRR</span>
+          </div>
+          <div class="metric-card skeleton">
+            <span class="metric-val" id="stripe-rev30">—</span>
+            <span class="metric-label">Last 30 days</span>
+          </div>
+          <div class="metric-card skeleton">
+            <span class="metric-val" id="stripe-subs">—</span>
+            <span class="metric-label">Active subs</span>
+          </div>
+          <div class="metric-card skeleton">
+            <span class="metric-val" id="stripe-newsubs">—</span>
+            <span class="metric-label">New (30d)</span>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table" id="charges-table">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody id="charges-tbody">
+              <tr class="skeleton-row"><td colspan="4"><div class="skel-line"></div></td></tr>
+              <tr class="skeleton-row"><td colspan="4"><div class="skel-line"></div></td></tr>
+              <tr class="skeleton-row"><td colspan="4"><div class="skel-line"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── PostHog Analytics ── -->
+    <section class="section" id="posthog-section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.5">
+            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+          Analytics <span class="period-badge">Last 7 days</span>
+        </h2>
+      </div>
+
+      <div class="not-configured" id="posthog-unconfigured" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Set <code>POSTHOG_API_KEY</code>, <code>POSTHOG_CREVAXO_PROJECT_ID</code>, and <code>POSTHOG_ROSTURA_PROJECT_ID</code> to enable analytics.
+      </div>
+
+      <div class="analytics-grid" id="analytics-grid">
+        <!-- Crevaxo analytics -->
+        <div class="analytics-card" id="analytics-crevaxo">
+          <div class="analytics-header">
+            <div class="app-badge crevaxo">Crevaxo</div>
+          </div>
+          <div class="analytics-stats">
+            <div class="astat skeleton">
+              <span class="astat-val" id="ph-crevaxo-pv">—</span>
+              <span class="astat-label">Pageviews</span>
+            </div>
+            <div class="astat skeleton">
+              <span class="astat-val" id="ph-crevaxo-sessions">—</span>
+              <span class="astat-label">Sessions</span>
+            </div>
+            <div class="astat skeleton">
+              <span class="astat-val" id="ph-crevaxo-visitors">—</span>
+              <span class="astat-label">Unique visitors</span>
+            </div>
+          </div>
+          <div class="top-pages" id="top-crevaxo">
+            <div class="top-pages-title">Top pages</div>
+            <div class="top-pages-list skeleton-list" id="tp-crevaxo-list"></div>
+          </div>
+          <div class="sparkline-wrap">
+            <canvas class="sparkline" id="spark-crevaxo" width="300" height="48"></canvas>
+          </div>
+        </div>
+
+        <!-- Rostura analytics -->
+        <div class="analytics-card" id="analytics-rostura">
+          <div class="analytics-header">
+            <div class="app-badge rostura">Rostura</div>
+          </div>
+          <div class="analytics-stats">
+            <div class="astat skeleton">
+              <span class="astat-val" id="ph-rostura-pv">—</span>
+              <span class="astat-label">Pageviews</span>
+            </div>
+            <div class="astat skeleton">
+              <span class="astat-val" id="ph-rostura-sessions">—</span>
+              <span class="astat-label">Sessions</span>
+            </div>
+            <div class="astat skeleton">
+              <span class="astat-val" id="ph-rostura-visitors">—</span>
+              <span class="astat-label">Unique visitors</span>
+            </div>
+          </div>
+          <div class="top-pages" id="top-rostura">
+            <div class="top-pages-title">Top pages</div>
+            <div class="top-pages-list skeleton-list" id="tp-rostura-list"></div>
+          </div>
+          <div class="sparkline-wrap">
+            <canvas class="sparkline" id="spark-rostura" width="300" height="48"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/dashboard/dashboard.js"></script>
+</body>
+</html>

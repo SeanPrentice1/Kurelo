@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kurelo Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface-1: #111111;
+      --surface-2: #1a1a1a;
+      --border: #1f1f1f;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --kurelo: #8b5cf6;
+      --kurelo-glow: rgba(139, 92, 246, 0.15);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-wrap {
+      width: 100%;
+      max-width: 380px;
+      padding: 24px;
+    }
+
+    .logo-area {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .logo-area svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 16px;
+    }
+
+    .logo-area h1 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .logo-area p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .card {
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+
+    .field input {
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .field input:focus {
+      border-color: var(--kurelo);
+      box-shadow: 0 0 0 3px var(--kurelo-glow);
+    }
+
+    .btn {
+      width: 100%;
+      background: var(--kurelo);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 11px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      margin-top: 4px;
+    }
+
+    .btn:hover { opacity: 0.88; }
+    .btn:active { opacity: 0.76; }
+
+    .error {
+      display: none;
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #f87171;
+      margin-bottom: 16px;
+    }
+
+    .error.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="logo-area">
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="48" height="48" rx="12" fill="#111111" stroke="#1f1f1f"/>
+        <path d="M14 14 L22 24 L14 34" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M24 14 L32 24 L24 34" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+      </svg>
+      <h1>Kurelo Dashboard</h1>
+      <p>Internal monitoring console</p>
+    </div>
+
+    <div class="card">
+      <div class="error" id="error-msg">Incorrect password. Try again.</div>
+      <form method="POST" action="/api/auth">
+        <div class="field">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Enter dashboard password"
+            autofocus
+            required
+          />
+        </div>
+        <button type="submit" class="btn">Enter Dashboard</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    if (new URLSearchParams(window.location.search).get('error')) {
+      document.getElementById('error-msg').classList.add('visible')
+    }
+  </script>
+</body>
+</html>
