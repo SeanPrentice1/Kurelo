@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/dashboard/dashboard.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/css/jsvectormap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" />
 </head>
 <body>
 
@@ -360,10 +361,174 @@
       </div><!-- /cx-grid -->
     </section>
 
+    <!-- ══════════════════════════════════════════════════════════════
+         ROSTURA WAITLIST
+    ══════════════════════════════════════════════════════════════════ -->
+    <section class="section" id="rostura-section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <div class="app-badge rostura" style="text-transform:none;letter-spacing:0">Rostura</div>
+          Waitlist
+        </h2>
+        <button class="export-btn" id="rostura-export-btn" style="display:none">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export CSV
+        </button>
+      </div>
+      <div class="not-configured" id="rostura-unconfigured" style="display:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Set <code>ROSTURA_SUPABASE_FUNCTION_URL</code> and <code>KURELO_DASHBOARD_SECRET</code> to enable waitlist data.
+      </div>
+      <div id="rostura-content">
+        <div class="metrics-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
+          <div class="metric-card skeleton"><span class="metric-val" id="ros-total">—</span><span class="metric-label">Total subscribers</span></div>
+          <div class="metric-card skeleton"><span class="metric-val" id="ros-new30">—</span><span class="metric-label">New (30d)</span></div>
+          <div class="metric-card skeleton"><span class="metric-val" id="ros-new7">—</span><span class="metric-label">New (7d)</span></div>
+        </div>
+        <div class="analytics-card" style="padding:16px 20px;gap:10px">
+          <div class="breakdown-title">Daily signups — last 14 days</div>
+          <canvas class="sparkline" id="spark-ros-waitlist" style="height:64px"></canvas>
+        </div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table class="data-table">
+            <thead><tr><th>Email</th><th>Signed up</th></tr></thead>
+            <tbody id="ros-waitlist-tbody">
+              <tr class="skeleton-row"><td colspan="2"><div class="skel-line"></div></td></tr>
+              <tr class="skeleton-row"><td colspan="2"><div class="skel-line"></div></td></tr>
+              <tr class="skeleton-row"><td colspan="2"><div class="skel-line"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         EMAIL
+    ══════════════════════════════════════════════════════════════════ -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          Email
+        </h2>
+        <button class="compose-btn" id="compose-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Compose
+        </button>
+      </div>
+      <div class="email-groups-grid" id="email-groups-grid">
+        <div class="email-group-card" id="eg-all">
+          <div class="eg-top"><span class="eg-app-badge crevaxo">Crevaxo</span><span class="eg-tag">All users</span></div>
+          <div class="eg-count" id="eg-count-all">—</div>
+          <div class="eg-label">recipients</div>
+          <button class="eg-compose-btn" data-group="all">Compose →</button>
+        </div>
+        <div class="email-group-card" id="eg-creator">
+          <div class="eg-top"><span class="eg-app-badge crevaxo">Crevaxo</span><span class="eg-tag">Creator tier</span></div>
+          <div class="eg-count" id="eg-count-creator">—</div>
+          <div class="eg-label">recipients</div>
+          <button class="eg-compose-btn" data-group="creator">Compose →</button>
+        </div>
+        <div class="email-group-card" id="eg-studio">
+          <div class="eg-top"><span class="eg-app-badge crevaxo">Crevaxo</span><span class="eg-tag">Studio tier</span></div>
+          <div class="eg-count" id="eg-count-studio">—</div>
+          <div class="eg-label">recipients</div>
+          <button class="eg-compose-btn" data-group="studio">Compose →</button>
+        </div>
+        <div class="email-group-card" id="eg-free">
+          <div class="eg-top"><span class="eg-app-badge crevaxo">Crevaxo</span><span class="eg-tag">Free tier</span></div>
+          <div class="eg-count" id="eg-count-free">—</div>
+          <div class="eg-label">recipients</div>
+          <button class="eg-compose-btn" data-group="free">Compose →</button>
+        </div>
+      </div>
+    </section>
+
   </main>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       EMAIL COMPOSER MODAL
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="em-overlay" id="em-overlay" style="display:none" aria-modal="true" role="dialog">
+    <div class="em-panel">
+
+      <div class="em-header">
+        <span class="em-title">Compose Email</span>
+        <button class="em-close-btn" id="em-close-btn" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="em-body">
+        <div class="em-row">
+          <label class="em-label">To</label>
+          <div class="em-to-wrap">
+            <select class="em-select" id="em-group">
+              <option value="all">All Crevaxo users</option>
+              <option value="creator">Creator tier</option>
+              <option value="studio">Studio tier</option>
+              <option value="free">Free tier</option>
+            </select>
+            <span class="em-recipient-count" id="em-recipient-count">— recipients</span>
+          </div>
+        </div>
+
+        <div class="em-row">
+          <label class="em-label">From</label>
+          <div class="em-from-options">
+            <label class="em-radio-label">
+              <input type="radio" name="em-from" value="hello@crevaxo.com" checked />
+              <span>hello@crevaxo.com</span>
+            </label>
+            <label class="em-radio-label">
+              <input type="radio" name="em-from" value="sean@crevaxo.com" />
+              <span>sean@crevaxo.com</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="em-row">
+          <label class="em-label">Subject</label>
+          <input type="text" class="em-input" id="em-subject" placeholder="Email subject…" />
+        </div>
+
+        <div class="em-editor-toolbar-row">
+          <div class="em-template-controls">
+            <select class="em-select em-select-sm" id="em-tpl-select">
+              <option value="">Load template…</option>
+            </select>
+            <button class="em-tpl-btn" id="em-tpl-save">Save</button>
+            <button class="em-tpl-btn em-tpl-btn-danger" id="em-tpl-delete">Delete</button>
+          </div>
+          <button class="em-html-toggle" id="em-html-toggle" title="Switch between rich text and raw HTML">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            HTML
+          </button>
+        </div>
+
+        <div class="em-editor-wrap">
+          <div id="em-quill"></div>
+          <textarea id="em-raw-html" class="em-raw-html" placeholder="Paste or write raw HTML…" style="display:none"></textarea>
+        </div>
+      </div>
+
+      <div class="em-footer">
+        <span class="em-status" id="em-status"></span>
+        <div class="em-footer-actions">
+          <button class="em-btn em-btn-cancel" id="em-cancel-btn">Cancel</button>
+          <button class="em-btn em-btn-send" id="em-send-btn">
+            Send to <span id="em-send-count">—</span> recipients
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/js/jsvectormap.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/maps/world.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.js"></script>
   <script src="/dashboard/dashboard.js"></script>
 </body>
 </html>
