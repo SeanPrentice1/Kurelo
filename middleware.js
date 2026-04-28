@@ -1,5 +1,5 @@
 export const config = {
-  matcher: ['/dashboard', '/dashboard/:path*', '/api/health', '/api/stripe', '/api/posthog'],
+  matcher: ['/dashboard', '/dashboard/:path*', '/api/health', '/api/stripe', '/api/posthog', '/api/crevaxo'],
 }
 
 export default function middleware(request) {

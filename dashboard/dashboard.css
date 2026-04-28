@@ -471,8 +471,74 @@ body {
 
 .analytics-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 12px;
+}
+
+/* ── New vs Returning ── */
+.nr-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.nr-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.nr-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.nr-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.nr-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+/* ── Breakdown grid ── */
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.breakdown-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.breakdown-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-bottom: 2px;
+}
+
+.breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .astat {
@@ -658,6 +724,162 @@ body {
   100% { opacity: 0.4; }
 }
 
+/* ── Crevaxo App Data ── */
+.cx-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.cx-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cx-card-wide {
+  grid-column: 1 / -1;
+}
+
+.cx-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Plan breakdown */
+.plan-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.plan-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.plan-name {
+  color: var(--text-muted);
+  min-width: 56px;
+}
+
+.plan-row .tp-bar-wrap {
+  flex: 1;
+  max-width: none;
+}
+
+/* Funnel */
+.funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.funnel-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.funnel-label {
+  color: var(--text-muted);
+  min-width: 160px;
+  white-space: nowrap;
+}
+
+.funnel-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.funnel-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.funnel-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Subsection title */
+.cx-subsection-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-bottom: 4px;
+}
+
+/* Two-col within cx-card */
+.cx-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Plan / role badges in users table */
+.plan-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.plan-badge.free {
+  background: var(--surface-3);
+  color: var(--text-faint);
+}
+
+.plan-badge.creator {
+  background: rgba(249, 115, 22, 0.12);
+  color: var(--crevaxo);
+  border: 1px solid rgba(249, 115, 22, 0.2);
+}
+
+.plan-badge.studio {
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--kurelo);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--kurelo);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
 /* ── Responsive ── */
 @media (max-width: 640px) {
   .header { padding: 0 16px; }
@@ -666,4 +888,8 @@ body {
   .analytics-grid { grid-template-columns: 1fr; }
   .metrics-row { grid-template-columns: repeat(2, 1fr); }
   .analytics-stats { grid-template-columns: repeat(3, 1fr); }
+  .breakdown-grid { grid-template-columns: 1fr; }
+  .cx-grid { grid-template-columns: 1fr; }
+  .cx-two-col { grid-template-columns: 1fr; }
+  .funnel-label { min-width: 110px; }
 }
