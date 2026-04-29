@@ -243,6 +243,256 @@ function renderAppAnalytics(appId, d) {
   renderGeoMap(appId, d.countryValues || {}, d.countryList || [])
 }
 
+// ── Email groups ────────────────────────────────────────────────────────────
+
+let _crevaxoEmailList = [] // full list cached from api/crevaxo
+
+function getRecipients(group) {
+  if (group === 'all') return _crevaxoEmailList.map(u => u.email).filter(Boolean)
+  return _crevaxoEmailList.filter(u => u.plan === group).map(u => u.email).filter(Boolean)
+}
+
+function renderEmailGroups() {
+  ;['all', 'creator', 'studio', 'free'].forEach(group => {
+    const count = getRecipients(group).length
+    const el = document.getElementById(`eg-count-${group}`)
+    if (el) el.textContent = count
+  })
+  // Update modal recipient count if open
+  updateModalRecipientCount()
+}
+
+function updateModalRecipientCount() {
+  const group = document.getElementById('em-group')?.value || 'all'
+  const count = getRecipients(group).length
+  const recipientEl = document.getElementById('em-recipient-count')
+  const sendCountEl = document.getElementById('em-send-count')
+  if (recipientEl) recipientEl.textContent = `${count} recipient${count !== 1 ? 's' : ''}`
+  if (sendCountEl) sendCountEl.textContent  = count
+}
+
+// ── Email composer modal ───────────────────────────────────────────────────
+
+const TEMPLATES_KEY = 'kurelo_email_templates'
+let _quill = null
+let _htmlMode = false
+
+function loadTemplates() {
+  try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]') } catch { return [] }
+}
+
+function saveTemplates(tpls) {
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(tpls))
+}
+
+function refreshTemplateSelect() {
+  const sel = document.getElementById('em-tpl-select')
+  if (!sel) return
+  const tpls = loadTemplates()
+  sel.innerHTML = '<option value="">Load template…</option>' +
+    tpls.map((t, i) => `<option value="${i}">${escHtml(t.name)}</option>`).join('')
+}
+
+function getEditorHtml() {
+  if (_htmlMode) {
+    return document.getElementById('em-raw-html')?.value || ''
+  }
+  return _quill?.root?.innerHTML || ''
+}
+
+function setEditorHtml(html) {
+  if (_htmlMode) {
+    const raw = document.getElementById('em-raw-html')
+    if (raw) raw.value = html
+  } else if (_quill) {
+    _quill.root.innerHTML = html
+  }
+}
+
+function openComposer(group = 'all') {
+  const overlay = document.getElementById('em-overlay')
+  if (!overlay) return
+
+  // Init Quill once
+  if (!_quill && typeof Quill !== 'undefined') {
+    _quill = new Quill('#em-quill', {
+      theme: 'snow',
+      placeholder: 'Write your email…',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline'],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          ['link'],
+          ['clean'],
+        ],
+      },
+    })
+  }
+
+  // Pre-select group
+  const groupSel = document.getElementById('em-group')
+  if (groupSel) groupSel.value = group
+
+  updateModalRecipientCount()
+  refreshTemplateSelect()
+
+  // Reset status
+  const status = document.getElementById('em-status')
+  if (status) { status.textContent = ''; status.className = 'em-status' }
+
+  overlay.style.display = 'flex'
+  document.body.style.overflow = 'hidden'
+}
+
+function closeComposer() {
+  const overlay = document.getElementById('em-overlay')
+  if (overlay) overlay.style.display = 'none'
+  document.body.style.overflow = ''
+}
+
+function initEmailComposer() {
+  // Open via header compose button
+  document.getElementById('compose-btn')?.addEventListener('click', () => openComposer('all'))
+
+  // Open via group cards
+  document.querySelectorAll('.eg-compose-btn').forEach(btn => {
+    btn.addEventListener('click', () => openComposer(btn.dataset.group || 'all'))
+  })
+
+  // Close
+  document.getElementById('em-close-btn')?.addEventListener('click', closeComposer)
+  document.getElementById('em-cancel-btn')?.addEventListener('click', closeComposer)
+  document.getElementById('em-overlay')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeComposer()
+  })
+
+  // Group change → update count
+  document.getElementById('em-group')?.addEventListener('change', updateModalRecipientCount)
+
+  // HTML toggle
+  document.getElementById('em-html-toggle')?.addEventListener('click', () => {
+    const toggleBtn = document.getElementById('em-html-toggle')
+    const quillWrap = document.getElementById('em-quill')
+    const rawArea   = document.getElementById('em-raw-html')
+    if (!quillWrap || !rawArea) return
+
+    _htmlMode = !_htmlMode
+
+    if (_htmlMode) {
+      // Visual → HTML: sync content
+      rawArea.value = _quill ? _quill.root.innerHTML : ''
+      quillWrap.style.display = 'none'
+      rawArea.style.display   = 'block'
+      toggleBtn.classList.add('active')
+    } else {
+      // HTML → Visual: sync content
+      if (_quill) _quill.root.innerHTML = rawArea.value
+      rawArea.style.display   = 'none'
+      quillWrap.style.display = 'block'
+      toggleBtn.classList.remove('active')
+    }
+  })
+
+  // Load template
+  document.getElementById('em-tpl-select')?.addEventListener('change', e => {
+    const idx = parseInt(e.target.value)
+    if (isNaN(idx)) return
+    const tpl = loadTemplates()[idx]
+    if (!tpl) return
+    const subjectEl = document.getElementById('em-subject')
+    if (subjectEl) subjectEl.value = tpl.subject || ''
+    setEditorHtml(tpl.html || '')
+  })
+
+  // Save template
+  document.getElementById('em-tpl-save')?.addEventListener('click', () => {
+    const name = prompt('Template name:')
+    if (!name?.trim()) return
+    const subject = document.getElementById('em-subject')?.value || ''
+    const html    = getEditorHtml()
+    const tpls    = loadTemplates()
+    // Overwrite if name exists
+    const existing = tpls.findIndex(t => t.name === name.trim())
+    if (existing >= 0) tpls[existing] = { name: name.trim(), subject, html }
+    else tpls.push({ name: name.trim(), subject, html })
+    saveTemplates(tpls)
+    refreshTemplateSelect()
+    // Select newly saved
+    const sel = document.getElementById('em-tpl-select')
+    if (sel) {
+      const newIdx = loadTemplates().findIndex(t => t.name === name.trim())
+      sel.value = newIdx >= 0 ? String(newIdx) : ''
+    }
+  })
+
+  // Delete template
+  document.getElementById('em-tpl-delete')?.addEventListener('click', () => {
+    const sel = document.getElementById('em-tpl-select')
+    const idx = parseInt(sel?.value)
+    if (isNaN(idx)) return
+    const tpls = loadTemplates()
+    const name = tpls[idx]?.name
+    if (!name || !confirm(`Delete template "${name}"?`)) return
+    tpls.splice(idx, 1)
+    saveTemplates(tpls)
+    refreshTemplateSelect()
+  })
+
+  // Send
+  document.getElementById('em-send-btn')?.addEventListener('click', async () => {
+    const group   = document.getElementById('em-group')?.value || 'all'
+    const from    = document.querySelector('input[name="em-from"]:checked')?.value
+    const subject = document.getElementById('em-subject')?.value?.trim()
+    const html    = getEditorHtml()?.trim()
+    const to      = getRecipients(group)
+    const status  = document.getElementById('em-status')
+    const sendBtn = document.getElementById('em-send-btn')
+
+    status.className = 'em-status'
+
+    if (!to.length) { status.textContent = 'No recipients in this group.'; return }
+    if (!subject)   { status.textContent = 'Subject is required.'; return }
+    if (!html || html === '<p><br></p>') { status.textContent = 'Email body is required.'; return }
+
+    const confirmed = confirm(`Send to ${to.length} recipient${to.length !== 1 ? 's' : ''}?`)
+    if (!confirmed) return
+
+    sendBtn.disabled = true
+    status.textContent = `Sending to ${to.length} recipient${to.length !== 1 ? 's' : ''}…`
+
+    try {
+      const r = await fetch('/api/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, from, subject, html }),
+      })
+      const data = await r.json()
+      if (!r.ok || data.error) throw new Error(data.error || 'Unknown error')
+      status.className  = 'em-status success'
+      status.textContent = `✓ Sent to ${data.sent} recipient${data.sent !== 1 ? 's' : ''}`
+    } catch (err) {
+      status.className  = 'em-status error'
+      status.textContent = `Error: ${err.message}`
+    } finally {
+      sendBtn.disabled = false
+    }
+  })
+}
+
+// CSV export for Rostura waitlist
+function initExportBtn() {
+  document.getElementById('rostura-export-btn')?.addEventListener('click', () => {
+    if (!_rosturaWaitlist.length) return
+    const rows = [['email', 'signed_up'], ..._rosturaWaitlist.map(r => [r.email, r.created_at])]
+    const csv  = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = Object.assign(document.createElement('a'), { href: url, download: 'rostura-waitlist.csv' })
+    a.click()
+    URL.revokeObjectURL(url)
+  })
+}
+
 // ── Geo map ────────────────────────────────────────────────────────────────
 
 const _maps = {}
@@ -311,7 +561,7 @@ function renderGeoMap(appId, countryValues, countryList) {
   }).join('')
 }
 
-function drawSparkline(canvasId, trend, appId) {
+function drawSparkline(canvasId, trend, colorOrAppId, valueKey = 'pageviews') {
   const canvas = document.getElementById(canvasId)
   if (!canvas || !trend.length) return
 
@@ -324,11 +574,13 @@ function drawSparkline(canvasId, trend, appId) {
   canvas.height = h * dpr
   ctx.scale(dpr, dpr)
 
-  const values = trend.map(t => t.pageviews)
+  const values = trend.map(t => t[valueKey])
   const max = Math.max(...values, 1)
   const pad = 4
 
-  const color = appId === 'crevaxo' ? '#f97316' : '#14b8a6'
+  const color = colorOrAppId === 'crevaxo' ? '#f97316'
+              : colorOrAppId === 'rostura'  ? '#14b8a6'
+              : colorOrAppId // treat as literal color string
 
   const grad = ctx.createLinearGradient(0, 0, 0, h)
   grad.addColorStop(0, color + '33')
@@ -360,6 +612,57 @@ function drawSparkline(canvasId, trend, appId) {
   ctx.stroke()
 }
 
+// ── Rostura Waitlist ───────────────────────────────────────────────────────
+
+let _rosturaWaitlist = [] // cached for CSV export
+
+function renderRostura(data) {
+  const unconfigured = document.getElementById('rostura-unconfigured')
+  const content      = document.getElementById('rostura-content')
+  const exportBtn    = document.getElementById('rostura-export-btn')
+
+  if (!data || !data.configured) {
+    if (unconfigured) unconfigured.style.display = 'flex'
+    if (content) content.style.display = 'none'
+    return
+  }
+
+  if (data.error) {
+    if (content) content.innerHTML =
+      `<div style="color:var(--text-faint);font-size:13px">Error: ${escHtml(data.error)}</div>`
+    return
+  }
+
+  const wl = data.waitlist || {}
+  _rosturaWaitlist = wl.list || []
+
+  setText('ros-total', fmt(wl.total))
+  setText('ros-new30', fmt(wl.new30d))
+  setText('ros-new7',  fmt(wl.new7d))
+
+  document.querySelectorAll('#rostura-content .metric-card').forEach(el => el.classList.remove('skeleton'))
+
+  if (exportBtn) exportBtn.style.display = 'flex'
+
+  // Sparkline — reuse drawSparkline with teal color and 'signups' key
+  drawSparkline('spark-ros-waitlist', wl.dailyBuckets || [], '#14b8a6', 'signups')
+
+  // Subscriber table
+  const tbody = document.getElementById('ros-waitlist-tbody')
+  if (tbody) {
+    if (!_rosturaWaitlist.length) {
+      tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-faint);text-align:center;padding:20px">No subscribers</td></tr>'
+    } else {
+      tbody.innerHTML = _rosturaWaitlist.map(r => `
+        <tr>
+          <td>${escHtml(r.email)}</td>
+          <td style="color:var(--text-muted)">${fmtJoined(r.created_at)}</td>
+        </tr>
+      `).join('')
+    }
+  }
+}
+
 // ── Crevaxo App Data ───────────────────────────────────────────────────────
 
 function renderCrevaxo(data) {
@@ -377,6 +680,10 @@ function renderCrevaxo(data) {
       `<div style="color:var(--text-faint);font-size:13px">Error: ${escHtml(data.error)}</div>`
     return
   }
+
+  // Cache email list for broadcast sending
+  _crevaxoEmailList = data.users?.emailList || []
+  renderEmailGroups()
 
   // Platform stats
   const p = data.platform || {}
@@ -527,17 +834,19 @@ async function loadAll() {
   const btn = document.getElementById('refresh-btn')
   btn.classList.add('spinning')
 
-  const [health, stripe, posthog, crevaxo] = await Promise.allSettled([
+  const [health, stripe, posthog, crevaxo, rostura] = await Promise.allSettled([
     fetch('/api/health').then(r => r.json()),
     fetch('/api/stripe').then(r => r.json()),
     fetch('/api/posthog').then(r => r.json()),
     fetch('/api/crevaxo').then(r => r.json()),
+    fetch('/api/rostura').then(r => r.json()),
   ])
 
   renderHealth(health.status === 'fulfilled' ? health.value : null)
   renderStripe(stripe.status === 'fulfilled' ? stripe.value : null)
   renderPosthog(posthog.status === 'fulfilled' ? posthog.value : null)
   renderCrevaxo(crevaxo.status === 'fulfilled' ? crevaxo.value : null)
+  renderRostura(rostura.status === 'fulfilled' ? rostura.value : null)
 
   const now = new Date()
   document.getElementById('last-updated').textContent =
@@ -554,4 +863,6 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
   loadAll()
 })
 
+initEmailComposer()
+initExportBtn()
 loadAll()
