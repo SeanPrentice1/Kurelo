@@ -238,6 +238,21 @@
 .platform-chip.linkedin  { background: rgba(0,119,181,0.15);   color: #5badda; }
 .platform-chip.reddit    { background: rgba(255,87,0,0.12);    color: #ff6b35; }
 
+/* Drag and drop */
+.post-card[draggable="true"] { cursor: grab; }
+.post-card.dragging { opacity: 0.35; cursor: grabbing; }
+
+.pipeline-col.drag-over {
+  border-color: var(--kurelo);
+  background: rgba(139, 92, 246, 0.05);
+}
+
+.pipeline-col.drag-over .pipeline-cards {
+  outline: 2px dashed rgba(139, 92, 246, 0.3);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
 /* Pipeline add btn */
 .pipeline-add-btn {
   width: 100%;
