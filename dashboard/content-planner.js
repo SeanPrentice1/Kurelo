@@ -1,0 +1,536 @@
+// ── Supabase config ───────────────────────────────────────────────────────
+// Fill in your Rostura project values from supabase.com → Project Settings → API
+const SUPABASE_URL      = 'https://ovmlohgptdiryvlwztxz.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92bWxvaGdwdGRpcnl2bHd6dHh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5ODQwNjYsImV4cCI6MjA5MTU2MDA2Nn0.oItHZhkUTmCPP9CO1-RacGyl8tD14pxdv71nxz6N3F4'
+
+const { createClient } = window.supabase
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+// ── Local cache ───────────────────────────────────────────────────────────
+let data = { posts: [], hashtags: [], captions: [] }
+
+// ── State ─────────────────────────────────────────────────────────────────
+const state = {
+  view: 'pipeline',
+  productFilter: 'all',
+  platformFilter: 'all',
+  htagProductFilter: 'all',
+  weekOffset: 0,
+  monthOffset: 0,
+  editingPostId: null,
+  editingCaptionId: null,
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────
+const PLATFORM_LABELS = { instagram: 'Instagram', tiktok: 'TikTok', linkedin: 'LinkedIn', reddit: 'Reddit' }
+const STATUS_ORDER    = ['idea', 'draft', 'ready', 'scheduled', 'posted']
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function platformChipHTML(platform) {
+  return `<span class="platform-chip ${platform}">${PLATFORM_LABELS[platform] ?? platform}</span>`
+}
+
+function productBadgeHTML(product) {
+  return `<div class="app-badge ${product}">${product === 'crevaxo' ? 'Crevaxo' : 'Rostura'}</div>`
+}
+
+function isSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+}
+
+function filteredPosts() {
+  return data.posts.filter(p => {
+    if (state.productFilter !== 'all' && p.product !== state.productFilter) return false
+    if (state.platformFilter !== 'all' && p.platform !== state.platformFilter) return false
+    return true
+  })
+}
+
+// ── Loading state ─────────────────────────────────────────────────────────
+function setLoading(on) {
+  document.getElementById('cp-loading').style.display = on ? 'flex' : 'none'
+}
+
+// ── Data fetching ─────────────────────────────────────────────────────────
+async function fetchAll() {
+  const [{ data: posts, error: e1 }, { data: hashtags, error: e2 }, { data: captions, error: e3 }] =
+    await Promise.all([
+      sb.from('cp_posts').select('*').order('created_at'),
+      sb.from('cp_hashtags').select('*').order('created_at'),
+      sb.from('cp_captions').select('*').order('created_at'),
+    ])
+  if (e1 || e2 || e3) { showToast('Error loading data'); return false }
+  data.posts    = posts    ?? []
+  data.hashtags = hashtags ?? []
+  data.captions = captions ?? []
+  return true
+}
+
+async function fetchPosts() {
+  const { data: rows, error } = await sb.from('cp_posts').select('*').order('created_at')
+  if (error) { showToast('Error loading posts'); return }
+  data.posts = rows ?? []
+}
+
+async function fetchHashtags() {
+  const { data: rows, error } = await sb.from('cp_hashtags').select('*').order('created_at')
+  if (error) { showToast('Error loading hashtags'); return }
+  data.hashtags = rows ?? []
+}
+
+async function fetchCaptions() {
+  const { data: rows, error } = await sb.from('cp_captions').select('*').order('created_at')
+  if (error) { showToast('Error loading captions'); return }
+  data.captions = rows ?? []
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+function render() {
+  if (state.view === 'pipeline') renderPipeline()
+  else if (state.view === 'week') renderWeek()
+  else if (state.view === 'month') renderMonth()
+  renderHashtags()
+  renderCaptions()
+}
+
+// ── Pipeline ──────────────────────────────────────────────────────────────
+function renderPipeline() {
+  const posts = filteredPosts()
+  STATUS_ORDER.forEach(status => {
+    const col = posts.filter(p => p.status === status)
+    document.getElementById(`count-${status}`).textContent = col.length
+    const container = document.getElementById(`cards-${status}`)
+    container.innerHTML = col.length
+      ? col.map(postCardHTML).join('')
+      : `<div class="empty-state">No posts</div>`
+  })
+}
+
+function postCardHTML(post) {
+  const dateStr = post.scheduled_date
+    ? new Date(post.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : ''
+  return `
+    <div class="post-card" data-id="${post.id}">
+      <div class="post-card-top">
+        ${productBadgeHTML(post.product)}
+        ${platformChipHTML(post.platform)}
+      </div>
+      <div class="post-card-title">${escHtml(post.title || 'Untitled')}</div>
+      ${dateStr ? `<div class="post-card-date">${dateStr}</div>` : ''}
+    </div>`
+}
+
+// ── Week view ─────────────────────────────────────────────────────────────
+function getWeekDays(offset) {
+  const now = new Date()
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7) + offset * 7)
+  monday.setHours(0, 0, 0, 0)
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d
+  })
+}
+
+function renderWeek() {
+  const days = getWeekDays(state.weekOffset)
+  const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  document.getElementById('week-label').textContent =
+    `${fmt(days[0])} — ${fmt(days[6])}, ${days[0].getFullYear()}`
+
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const posts = filteredPosts()
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+  document.getElementById('week-grid').innerHTML = days.map((day, i) => {
+    const isToday = day.getTime() === today.getTime()
+    const dayPosts = posts.filter(p => p.scheduled_date &&
+      isSameDay(new Date(p.scheduled_date + 'T00:00:00'), day))
+    return `
+      <div class="week-day${isToday ? ' today' : ''}">
+        <div class="week-day-header">
+          <span class="week-day-name">${dayNames[i]}</span>
+          <span class="week-day-num">${day.getDate()}</span>
+        </div>
+        <div class="week-day-cards">${dayPosts.map(calCardHTML).join('')}</div>
+      </div>`
+  }).join('')
+}
+
+// ── Month view ────────────────────────────────────────────────────────────
+function renderMonth() {
+  const now = new Date()
+  const target = new Date(now.getFullYear(), now.getMonth() + state.monthOffset, 1)
+  document.getElementById('month-label').textContent =
+    target.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const posts = filteredPosts()
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+  const firstDay = new Date(target.getFullYear(), target.getMonth(), 1)
+  const lastDay  = new Date(target.getFullYear(), target.getMonth() + 1, 0)
+  const startOffset = (firstDay.getDay() + 6) % 7
+  const totalCells  = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7
+
+  const headerHTML = dayNames.map(d => `<div class="month-day-label">${d}</div>`).join('')
+  let daysHTML = ''
+
+  for (let i = 0; i < totalCells; i++) {
+    const d = new Date(firstDay)
+    d.setDate(1 - startOffset + i)
+    d.setHours(0, 0, 0, 0)
+    const inMonth = d.getMonth() === target.getMonth()
+    const isToday = d.getTime() === today.getTime()
+    const dayPosts = posts.filter(p => p.scheduled_date &&
+      isSameDay(new Date(p.scheduled_date + 'T00:00:00'), d))
+    const shown = dayPosts.slice(0, 3)
+    const more  = dayPosts.length - 3
+    daysHTML += `
+      <div class="month-day${!inMonth ? ' other-month' : ''}${isToday ? ' today' : ''}">
+        <div class="month-day-num">${d.getDate()}</div>
+        <div class="month-day-cards">
+          ${shown.map(calCardHTML).join('')}
+          ${more > 0 ? `<span class="cal-more">+${more} more</span>` : ''}
+        </div>
+      </div>`
+  }
+
+  document.getElementById('month-grid').innerHTML = headerHTML + daysHTML
+}
+
+function calCardHTML(post) {
+  return `<div class="cal-card ${post.product}" data-id="${post.id}" title="${escHtml(post.title || 'Untitled')}">${escHtml(post.title || 'Untitled')}</div>`
+}
+
+// ── Hashtag Bank ──────────────────────────────────────────────────────────
+function renderHashtags() {
+  const filter = state.htagProductFilter
+  const tags   = data.hashtags.filter(h => filter === 'all' || h.product === filter)
+  const container = document.getElementById('hashtag-chips')
+  container.innerHTML = tags.length
+    ? tags.map(h => `
+        <div class="hashtag-chip ${h.product}" data-htag-id="${h.id}" title="Click to copy">
+          <span class="htag-dot"></span>#${escHtml(h.tag)}
+          <span class="htag-del" data-htag-del="${h.id}">✕</span>
+        </div>`).join('')
+    : `<div class="empty-state" style="width:100%;padding:12px">No hashtags yet — add some to get started.</div>`
+}
+
+// ── Caption Storage ───────────────────────────────────────────────────────
+function renderCaptions() {
+  const container = document.getElementById('caption-list')
+  container.innerHTML = data.captions.length
+    ? data.captions.map(c => `
+        <div class="caption-item" data-caption-id="${c.id}">
+          <div class="caption-item-header">
+            ${productBadgeHTML(c.product)}
+            ${platformChipHTML(c.platform)}
+            <span class="caption-item-label">${escHtml(c.label || '')}</span>
+            <button class="caption-copy-btn" data-copy-caption="${c.id}">Copy</button>
+          </div>
+          <div class="caption-item-text">${escHtml(c.text)}</div>
+        </div>`).join('')
+    : `<div class="empty-state">No captions saved yet.</div>`
+}
+
+// ── Post Modal ────────────────────────────────────────────────────────────
+function openPostModal(post = null, defaultStatus = 'idea') {
+  state.editingPostId = post?.id ?? null
+  document.getElementById('post-modal-title').textContent = post ? 'Edit Post' : 'New Post'
+  document.getElementById('post-title').value   = post?.title    ?? ''
+  document.getElementById('post-caption').value = post?.caption  ?? ''
+  document.getElementById('post-notes').value   = post?.notes    ?? ''
+  document.getElementById('post-platform').value = post?.platform ?? 'instagram'
+  document.getElementById('post-status').value   = post?.status   ?? defaultStatus
+  document.getElementById('post-date').value     = post?.scheduled_date ?? ''
+  const productVal = post?.product ?? 'rostura'
+  document.querySelectorAll('input[name="post-product"]').forEach(r => { r.checked = r.value === productVal })
+  document.getElementById('post-delete-btn').style.display = post ? '' : 'none'
+  document.getElementById('post-modal-overlay').classList.remove('hidden')
+  setTimeout(() => document.getElementById('post-title').focus(), 50)
+}
+
+function closePostModal() {
+  document.getElementById('post-modal-overlay').classList.add('hidden')
+  state.editingPostId = null
+}
+
+async function savePost() {
+  const title = document.getElementById('post-title').value.trim()
+  if (!title) { document.getElementById('post-title').focus(); return }
+
+  const payload = {
+    title,
+    product:        document.querySelector('input[name="post-product"]:checked')?.value ?? 'rostura',
+    platform:       document.getElementById('post-platform').value,
+    status:         document.getElementById('post-status').value,
+    caption:        document.getElementById('post-caption').value.trim(),
+    notes:          document.getElementById('post-notes').value.trim(),
+    scheduled_date: document.getElementById('post-date').value || null,
+  }
+
+  const btn = document.getElementById('post-save-btn')
+  btn.textContent = 'Saving…'; btn.disabled = true
+
+  let error
+  if (state.editingPostId) {
+    ;({ error } = await sb.from('cp_posts')
+      .update({ ...payload, updated_at: new Date().toISOString() })
+      .eq('id', state.editingPostId))
+  } else {
+    ;({ error } = await sb.from('cp_posts').insert(payload))
+  }
+
+  btn.textContent = 'Save Post'; btn.disabled = false
+
+  if (error) { showToast('Error saving post'); console.error(error); return }
+
+  closePostModal()
+  await fetchPosts()
+  render()
+}
+
+async function deletePost() {
+  if (!state.editingPostId || !confirm('Delete this post?')) return
+  const { error } = await sb.from('cp_posts').delete().eq('id', state.editingPostId)
+  if (error) { showToast('Error deleting post'); return }
+  closePostModal()
+  await fetchPosts()
+  render()
+}
+
+// ── Hashtag Modal ─────────────────────────────────────────────────────────
+function openHashtagModal() {
+  document.getElementById('htag-text').value = ''
+  document.querySelector('input[name="htag-product"][value="both"]').checked = true
+  document.getElementById('htag-modal-overlay').classList.remove('hidden')
+  setTimeout(() => document.getElementById('htag-text').focus(), 50)
+}
+
+function closeHashtagModal() {
+  document.getElementById('htag-modal-overlay').classList.add('hidden')
+}
+
+async function saveHashtag() {
+  const tag = document.getElementById('htag-text').value.trim().replace(/^#+/, '')
+  if (!tag) { document.getElementById('htag-text').focus(); return }
+
+  const product = document.querySelector('input[name="htag-product"]:checked')?.value ?? 'both'
+  const { error } = await sb.from('cp_hashtags').insert({ tag, product })
+  if (error) { showToast('Error saving hashtag'); return }
+
+  closeHashtagModal()
+  await fetchHashtags()
+  renderHashtags()
+}
+
+async function deleteHashtag(id) {
+  const { error } = await sb.from('cp_hashtags').delete().eq('id', id)
+  if (error) { showToast('Error deleting hashtag'); return }
+  await fetchHashtags()
+  renderHashtags()
+}
+
+// ── Caption Modal ─────────────────────────────────────────────────────────
+function openCaptionModal(caption = null) {
+  state.editingCaptionId = caption?.id ?? null
+  document.getElementById('caption-modal-title').textContent = caption ? 'Edit Caption' : 'Add Caption'
+  document.getElementById('caption-text').value     = caption?.text     ?? ''
+  document.getElementById('caption-label').value    = caption?.label    ?? ''
+  document.getElementById('caption-platform').value = caption?.platform ?? 'instagram'
+  const productVal = caption?.product ?? 'rostura'
+  document.querySelectorAll('input[name="caption-product"]').forEach(r => { r.checked = r.value === productVal })
+  document.getElementById('caption-delete-btn').style.display = caption ? '' : 'none'
+  document.getElementById('caption-modal-overlay').classList.remove('hidden')
+  setTimeout(() => document.getElementById('caption-text').focus(), 50)
+}
+
+function closeCaptionModal() {
+  document.getElementById('caption-modal-overlay').classList.add('hidden')
+  state.editingCaptionId = null
+}
+
+async function saveCaption() {
+  const text = document.getElementById('caption-text').value.trim()
+  if (!text) { document.getElementById('caption-text').focus(); return }
+
+  const payload = {
+    text,
+    label:    document.getElementById('caption-label').value.trim(),
+    platform: document.getElementById('caption-platform').value,
+    product:  document.querySelector('input[name="caption-product"]:checked')?.value ?? 'rostura',
+  }
+
+  const btn = document.getElementById('caption-save-btn')
+  btn.textContent = 'Saving…'; btn.disabled = true
+
+  let error
+  if (state.editingCaptionId) {
+    ;({ error } = await sb.from('cp_captions').update(payload).eq('id', state.editingCaptionId))
+  } else {
+    ;({ error } = await sb.from('cp_captions').insert(payload))
+  }
+
+  btn.textContent = 'Save Caption'; btn.disabled = false
+
+  if (error) { showToast('Error saving caption'); return }
+
+  closeCaptionModal()
+  await fetchCaptions()
+  renderCaptions()
+}
+
+async function deleteCaption() {
+  if (!state.editingCaptionId || !confirm('Delete this caption?')) return
+  const { error } = await sb.from('cp_captions').delete().eq('id', state.editingCaptionId)
+  if (error) { showToast('Error deleting caption'); return }
+  closeCaptionModal()
+  await fetchCaptions()
+  renderCaptions()
+}
+
+// ── Clipboard + Toast ─────────────────────────────────────────────────────
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard'))
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('copied-toast')
+  toast.textContent = msg
+  toast.classList.add('show')
+  clearTimeout(toast._timer)
+  toast._timer = setTimeout(() => toast.classList.remove('show'), 2200)
+}
+
+// ── Event delegation ──────────────────────────────────────────────────────
+document.addEventListener('click', e => {
+  const postCard = e.target.closest('.post-card, .cal-card')
+  if (postCard && !e.target.closest('.htag-del')) {
+    const post = data.posts.find(p => p.id === postCard.dataset.id)
+    if (post) { openPostModal(post); return }
+  }
+
+  const pipelineAdd = e.target.closest('.pipeline-add-btn')
+  if (pipelineAdd) { openPostModal(null, pipelineAdd.dataset.status); return }
+
+  if (e.target.matches('[data-filter="product"]')) {
+    state.productFilter = e.target.dataset.value
+    document.querySelectorAll('[data-filter="product"]').forEach(b =>
+      b.classList.toggle('active', b.dataset.value === state.productFilter))
+    render(); return
+  }
+
+  if (e.target.matches('[data-filter="platform"]')) {
+    state.platformFilter = e.target.dataset.value
+    document.querySelectorAll('[data-filter="platform"]').forEach(b =>
+      b.classList.toggle('active', b.dataset.value === state.platformFilter))
+    render(); return
+  }
+
+  if (e.target.matches('[data-filter="htag-product"]')) {
+    state.htagProductFilter = e.target.dataset.value
+    document.querySelectorAll('[data-filter="htag-product"]').forEach(b =>
+      b.classList.toggle('active', b.dataset.value === state.htagProductFilter))
+    renderHashtags(); return
+  }
+
+  const htagDel = e.target.closest('[data-htag-del]')
+  if (htagDel) { deleteHashtag(htagDel.dataset.htagDel); return }
+
+  const htagChip = e.target.closest('.hashtag-chip')
+  if (htagChip) {
+    const tag = data.hashtags.find(h => h.id === htagChip.dataset.htagId)
+    if (tag) copyText(`#${tag.tag}`)
+    return
+  }
+
+  const copyBtn = e.target.closest('[data-copy-caption]')
+  if (copyBtn) {
+    e.stopPropagation()
+    const cap = data.captions.find(c => c.id === copyBtn.dataset.copyCaption)
+    if (cap) copyText(cap.text)
+    return
+  }
+
+  const captionItem = e.target.closest('.caption-item')
+  if (captionItem) {
+    const cap = data.captions.find(c => c.id === captionItem.dataset.captionId)
+    if (cap) openCaptionModal(cap)
+    return
+  }
+})
+
+// View toggle
+document.querySelectorAll('.view-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.view = btn.dataset.view
+    document.querySelectorAll('.view-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.view === state.view))
+    document.querySelectorAll('.cp-view').forEach(v =>
+      v.classList.toggle('hidden', v.id !== `view-${state.view}`))
+    render()
+  })
+})
+
+document.getElementById('new-post-btn').addEventListener('click', () => openPostModal())
+
+document.getElementById('post-modal-close').addEventListener('click', closePostModal)
+document.getElementById('post-cancel-btn').addEventListener('click', closePostModal)
+document.getElementById('post-save-btn').addEventListener('click', savePost)
+document.getElementById('post-delete-btn').addEventListener('click', deletePost)
+document.getElementById('post-modal-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closePostModal()
+})
+
+document.getElementById('add-hashtag-btn').addEventListener('click', openHashtagModal)
+document.getElementById('htag-modal-close').addEventListener('click', closeHashtagModal)
+document.getElementById('htag-cancel-btn').addEventListener('click', closeHashtagModal)
+document.getElementById('htag-save-btn').addEventListener('click', saveHashtag)
+document.getElementById('htag-modal-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeHashtagModal()
+})
+document.getElementById('htag-text').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveHashtag()
+})
+
+document.getElementById('add-caption-btn').addEventListener('click', () => openCaptionModal())
+document.getElementById('caption-modal-close').addEventListener('click', closeCaptionModal)
+document.getElementById('caption-cancel-btn').addEventListener('click', closeCaptionModal)
+document.getElementById('caption-save-btn').addEventListener('click', saveCaption)
+document.getElementById('caption-delete-btn').addEventListener('click', deleteCaption)
+document.getElementById('caption-modal-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeCaptionModal()
+})
+
+document.getElementById('week-prev').addEventListener('click', () => { state.weekOffset--; renderWeek() })
+document.getElementById('week-next').addEventListener('click', () => { state.weekOffset++; renderWeek() })
+document.getElementById('week-today').addEventListener('click', () => { state.weekOffset = 0; renderWeek() })
+
+document.getElementById('month-prev').addEventListener('click', () => { state.monthOffset--; renderMonth() })
+document.getElementById('month-next').addEventListener('click', () => { state.monthOffset++; renderMonth() })
+document.getElementById('month-today').addEventListener('click', () => { state.monthOffset = 0; renderMonth() })
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return
+  closePostModal(); closeHashtagModal(); closeCaptionModal()
+})
+
+// ── Init ──────────────────────────────────────────────────────────────────
+async function init() {
+  setLoading(true)
+  const ok = await fetchAll()
+  setLoading(false)
+  if (ok) render()
+}
+
+init()

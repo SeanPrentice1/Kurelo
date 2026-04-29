@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Content Planner — Kurelo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/dashboard/dashboard.css" />
+  <link rel="stylesheet" href="/dashboard/content-planner.css" />
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <div class="header-left">
+      <svg class="header-logo" viewBox="0 0 32 32" fill="none">
+        <path d="M8 8 L15 16 L8 24"  stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M16 8 L23 16 L16 24" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/>
+      </svg>
+      <span class="header-title">Kurelo <span class="header-sub">Content Planner</span></span>
+    </div>
+    <div class="header-right">
+      <nav class="page-nav">
+        <a href="/dashboard/" class="page-nav-link">Dashboard</a>
+        <a href="/dashboard/content-planner.html" class="page-nav-link active">Content Planner</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main cp-main">
+
+    <!-- ── Toolbar ── -->
+    <div class="cp-toolbar">
+      <div class="cp-filters">
+        <div class="filter-group">
+          <button class="filter-btn active" data-filter="product" data-value="all">All</button>
+          <button class="filter-btn crevaxo" data-filter="product" data-value="crevaxo">Crevaxo</button>
+          <button class="filter-btn rostura" data-filter="product" data-value="rostura">Rostura</button>
+        </div>
+        <div class="filter-group">
+          <button class="filter-btn active" data-filter="platform" data-value="all">All</button>
+          <button class="filter-btn" data-filter="platform" data-value="instagram">Instagram</button>
+          <button class="filter-btn" data-filter="platform" data-value="tiktok">TikTok</button>
+          <button class="filter-btn" data-filter="platform" data-value="linkedin">LinkedIn</button>
+          <button class="filter-btn" data-filter="platform" data-value="reddit">Reddit</button>
+        </div>
+      </div>
+      <div class="cp-toolbar-right">
+        <div class="view-toggle">
+          <button class="view-btn active" data-view="pipeline">Pipeline</button>
+          <button class="view-btn" data-view="week">Week</button>
+          <button class="view-btn" data-view="month">Month</button>
+        </div>
+        <button class="add-btn" id="new-post-btn">+ New Post</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PIPELINE VIEW
+    ══════════════════════════════════════════════════════════════════ -->
+    <div class="cp-view" id="view-pipeline">
+      <div class="pipeline">
+        <div class="pipeline-col" data-status="idea">
+          <div class="pipeline-col-header">
+            <span class="pipeline-col-title">Idea</span>
+            <span class="pipeline-col-count" id="count-idea">0</span>
+          </div>
+          <div class="pipeline-cards" id="cards-idea"></div>
+          <button class="pipeline-add-btn" data-status="idea">+ Add</button>
+        </div>
+        <div class="pipeline-col" data-status="draft">
+          <div class="pipeline-col-header">
+            <span class="pipeline-col-title">Draft</span>
+            <span class="pipeline-col-count" id="count-draft">0</span>
+          </div>
+          <div class="pipeline-cards" id="cards-draft"></div>
+          <button class="pipeline-add-btn" data-status="draft">+ Add</button>
+        </div>
+        <div class="pipeline-col" data-status="ready">
+          <div class="pipeline-col-header">
+            <span class="pipeline-col-title">Ready</span>
+            <span class="pipeline-col-count" id="count-ready">0</span>
+          </div>
+          <div class="pipeline-cards" id="cards-ready"></div>
+          <button class="pipeline-add-btn" data-status="ready">+ Add</button>
+        </div>
+        <div class="pipeline-col" data-status="scheduled">
+          <div class="pipeline-col-header">
+            <span class="pipeline-col-title">Scheduled</span>
+            <span class="pipeline-col-count" id="count-scheduled">0</span>
+          </div>
+          <div class="pipeline-cards" id="cards-scheduled"></div>
+          <button class="pipeline-add-btn" data-status="scheduled">+ Add</button>
+        </div>
+        <div class="pipeline-col" data-status="posted">
+          <div class="pipeline-col-header">
+            <span class="pipeline-col-title">Posted</span>
+            <span class="pipeline-col-count" id="count-posted">0</span>
+          </div>
+          <div class="pipeline-cards" id="cards-posted"></div>
+          <button class="pipeline-add-btn" data-status="posted">+ Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         WEEK VIEW
+    ══════════════════════════════════════════════════════════════════ -->
+    <div class="cp-view hidden" id="view-week">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" id="week-prev">‹</button>
+        <span class="cal-period" id="week-label"></span>
+        <button class="cal-nav-btn" id="week-next">›</button>
+        <button class="cal-today-btn" id="week-today">Today</button>
+      </div>
+      <div class="week-grid" id="week-grid"></div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         MONTH VIEW
+    ══════════════════════════════════════════════════════════════════ -->
+    <div class="cp-view hidden" id="view-month">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" id="month-prev">‹</button>
+        <span class="cal-period" id="month-label"></span>
+        <button class="cal-nav-btn" id="month-next">›</button>
+        <button class="cal-today-btn" id="month-today">Today</button>
+      </div>
+      <div class="month-grid" id="month-grid"></div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         HASHTAG BANK + CAPTION STORAGE
+    ══════════════════════════════════════════════════════════════════ -->
+    <div class="cp-banks">
+
+      <section class="bank-section">
+        <div class="section-header">
+          <h2 class="section-title"># Hashtag Bank</h2>
+          <button class="add-btn small" id="add-hashtag-btn">+ Add</button>
+        </div>
+        <div class="hashtag-product-filter">
+          <button class="filter-btn small active" data-filter="htag-product" data-value="all">All</button>
+          <button class="filter-btn small crevaxo" data-filter="htag-product" data-value="crevaxo">Crevaxo</button>
+          <button class="filter-btn small rostura" data-filter="htag-product" data-value="rostura">Rostura</button>
+          <button class="filter-btn small" data-filter="htag-product" data-value="both">Both</button>
+        </div>
+        <div class="hashtag-chips" id="hashtag-chips"></div>
+      </section>
+
+      <section class="bank-section">
+        <div class="section-header">
+          <h2 class="section-title">¶ Caption Storage</h2>
+          <button class="add-btn small" id="add-caption-btn">+ Add</button>
+        </div>
+        <div class="caption-list" id="caption-list"></div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       POST MODAL
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay hidden" id="post-modal-overlay">
+    <div class="modal" id="post-modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="post-modal-title">New Post</h3>
+        <button class="modal-close" id="post-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Title</label>
+          <input class="form-input" id="post-title" type="text" placeholder="Post title or idea…" />
+        </div>
+        <div class="form-row two">
+          <div class="form-group">
+            <label class="form-label">Product</label>
+            <div class="radio-group">
+              <label class="radio-label crevaxo"><input type="radio" name="post-product" value="crevaxo" /> Crevaxo</label>
+              <label class="radio-label rostura"><input type="radio" name="post-product" value="rostura" checked /> Rostura</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Platform</label>
+            <select class="form-select" id="post-platform">
+              <option value="instagram">Instagram</option>
+              <option value="tiktok">TikTok</option>
+              <option value="linkedin">LinkedIn</option>
+              <option value="reddit">Reddit</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row two">
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="form-select" id="post-status">
+              <option value="idea">Idea</option>
+              <option value="draft">Draft</option>
+              <option value="ready">Ready</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="posted">Posted</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input class="form-input" id="post-date" type="date" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Caption</label>
+          <textarea class="form-textarea" id="post-caption" rows="5" placeholder="Write your caption…"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-textarea" id="post-notes" rows="2" placeholder="Internal notes…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn danger" id="post-delete-btn" style="display:none">Delete</button>
+        <div style="flex:1"></div>
+        <button class="modal-btn secondary" id="post-cancel-btn">Cancel</button>
+        <button class="modal-btn primary" id="post-save-btn">Save Post</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       HASHTAG MODAL
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay hidden" id="htag-modal-overlay">
+    <div class="modal small" id="htag-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Hashtag</h3>
+        <button class="modal-close" id="htag-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Hashtag</label>
+          <input class="form-input" id="htag-text" type="text" placeholder="yourhashtag (# added automatically)" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Product</label>
+          <div class="radio-group">
+            <label class="radio-label crevaxo"><input type="radio" name="htag-product" value="crevaxo" /> Crevaxo</label>
+            <label class="radio-label rostura"><input type="radio" name="htag-product" value="rostura" /> Rostura</label>
+            <label class="radio-label"><input type="radio" name="htag-product" value="both" checked /> Both</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div style="flex:1"></div>
+        <button class="modal-btn secondary" id="htag-cancel-btn">Cancel</button>
+        <button class="modal-btn primary" id="htag-save-btn">Add Hashtag</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       CAPTION MODAL
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay hidden" id="caption-modal-overlay">
+    <div class="modal" id="caption-modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="caption-modal-title">Add Caption</h3>
+        <button class="modal-close" id="caption-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row two">
+          <div class="form-group">
+            <label class="form-label">Product</label>
+            <div class="radio-group">
+              <label class="radio-label crevaxo"><input type="radio" name="caption-product" value="crevaxo" /> Crevaxo</label>
+              <label class="radio-label rostura"><input type="radio" name="caption-product" value="rostura" checked /> Rostura</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Platform</label>
+            <select class="form-select" id="caption-platform">
+              <option value="instagram">Instagram</option>
+              <option value="tiktok">TikTok</option>
+              <option value="linkedin">LinkedIn</option>
+              <option value="reddit">Reddit</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Label (optional)</label>
+          <input class="form-input" id="caption-label" type="text" placeholder="e.g. Product launch hook" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Caption</label>
+          <textarea class="form-textarea" id="caption-text" rows="7" placeholder="Write your caption template…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn danger" id="caption-delete-btn" style="display:none">Delete</button>
+        <div style="flex:1"></div>
+        <button class="modal-btn secondary" id="caption-cancel-btn">Cancel</button>
+        <button class="modal-btn primary" id="caption-save-btn">Save Caption</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="copied-toast" id="copied-toast"></div>
+
+  <div class="cp-loading" id="cp-loading">
+    <div class="cp-loading-spinner"></div>
+    <span>Loading…</span>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/dashboard/content-planner.js"></script>
+</body>
+</html>
