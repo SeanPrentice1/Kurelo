@@ -505,10 +505,16 @@
             <button class="em-tpl-btn" id="em-tpl-save">Save</button>
             <button class="em-tpl-btn em-tpl-btn-danger" id="em-tpl-delete">Delete</button>
           </div>
-          <button class="em-html-toggle" id="em-html-toggle" title="Switch between rich text and raw HTML">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-            HTML
-          </button>
+          <div class="em-toolbar-right">
+            <button class="em-preview-btn" id="em-preview-btn" title="Preview HTML">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Preview
+            </button>
+            <button class="em-html-toggle" id="em-html-toggle" title="Switch between rich text and raw HTML">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              HTML
+            </button>
+          </div>
         </div>
 
         <div class="em-editor-wrap">
@@ -531,6 +537,32 @@
     </div>
   </div>
 
+  <!-- Preview modal -->
+  <div class="em-preview-overlay" id="em-preview-overlay" style="display:none">
+    <div class="em-preview-panel">
+      <div class="em-preview-header">
+        <span class="em-preview-title">Email Preview</span>
+        <div class="em-preview-header-right">
+          <div class="em-preview-size-toggle">
+            <button class="em-size-btn active" data-width="100%" title="Desktop">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </button>
+            <button class="em-size-btn" data-width="375px" title="Mobile">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            </button>
+          </div>
+          <button class="em-close-btn" id="em-preview-close">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="em-preview-body">
+        <iframe id="em-preview-frame" class="em-preview-frame" sandbox="allow-same-origin"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/js/jsvectormap.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/maps/world.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.js"></script>

@@ -1,5 +1,14 @@
 const REFRESH_MS = 30_000
 
+// ── Supabase (Rostura project) ────────────────────────────────────────────
+const _sb = (() => {
+  if (typeof window.supabase === 'undefined') return null
+  return window.supabase.createClient(
+    'https://ovmlohgptdiryvlwztxz.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92bWxvaGdwdGRpcnl2bHd6dHh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5ODQwNjYsImV4cCI6MjA5MTU2MDA2Nn0.oItHZhkUTmCPP9CO1-RacGyl8tD14pxdv71nxz6N3F4'
+  )
+})()
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function fmt(n) {
@@ -273,24 +282,22 @@ function updateModalRecipientCount() {
 
 // ── Email composer modal ───────────────────────────────────────────────────
 
-const TEMPLATES_KEY = 'kurelo_email_templates'
 let _quill = null
 let _htmlMode = false
+let _templates = []  // local cache keyed by id
 
-function loadTemplates() {
-  try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]') } catch { return [] }
+async function fetchTemplates() {
+  if (!_sb) return
+  const { data, error } = await _sb.from('cp_email_templates').select('*').order('name')
+  if (!error) _templates = data ?? []
 }
 
-function saveTemplates(tpls) {
-  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(tpls))
-}
-
-function refreshTemplateSelect() {
+async function refreshTemplateSelect() {
+  await fetchTemplates()
   const sel = document.getElementById('em-tpl-select')
   if (!sel) return
-  const tpls = loadTemplates()
   sel.innerHTML = '<option value="">Load template…</option>' +
-    tpls.map((t, i) => `<option value="${i}">${escHtml(t.name)}</option>`).join('')
+    _templates.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('')
 }
 
 function getEditorHtml() {
@@ -309,7 +316,7 @@ function setEditorHtml(html) {
   }
 }
 
-function openComposer(group = 'all') {
+async function openComposer(group = 'all') {
   const overlay = document.getElementById('em-overlay')
   if (!overlay) return
 
@@ -334,7 +341,7 @@ function openComposer(group = 'all') {
   if (groupSel) groupSel.value = group
 
   updateModalRecipientCount()
-  refreshTemplateSelect()
+  await refreshTemplateSelect()
 
   // Reset status
   const status = document.getElementById('em-status')
@@ -395,9 +402,9 @@ function initEmailComposer() {
 
   // Load template
   document.getElementById('em-tpl-select')?.addEventListener('change', e => {
-    const idx = parseInt(e.target.value)
-    if (isNaN(idx)) return
-    const tpl = loadTemplates()[idx]
+    const id = e.target.value
+    if (!id) return
+    const tpl = _templates.find(t => t.id === id)
     if (!tpl) return
     const subjectEl = document.getElementById('em-subject')
     if (subjectEl) subjectEl.value = tpl.subject || ''
@@ -405,37 +412,73 @@ function initEmailComposer() {
   })
 
   // Save template
-  document.getElementById('em-tpl-save')?.addEventListener('click', () => {
+  document.getElementById('em-tpl-save')?.addEventListener('click', async () => {
+    if (!_sb) return
     const name = prompt('Template name:')
     if (!name?.trim()) return
     const subject = document.getElementById('em-subject')?.value || ''
     const html    = getEditorHtml()
-    const tpls    = loadTemplates()
-    // Overwrite if name exists
-    const existing = tpls.findIndex(t => t.name === name.trim())
-    if (existing >= 0) tpls[existing] = { name: name.trim(), subject, html }
-    else tpls.push({ name: name.trim(), subject, html })
-    saveTemplates(tpls)
-    refreshTemplateSelect()
-    // Select newly saved
+    const saveBtn = document.getElementById('em-tpl-save')
+    saveBtn.textContent = '…'; saveBtn.disabled = true
+    const { error } = await _sb.from('cp_email_templates')
+      .upsert({ name: name.trim(), subject, html, updated_at: new Date().toISOString() },
+               { onConflict: 'name' })
+    saveBtn.textContent = 'Save'; saveBtn.disabled = false
+    if (error) { alert('Error saving template'); return }
+    await refreshTemplateSelect()
     const sel = document.getElementById('em-tpl-select')
-    if (sel) {
-      const newIdx = loadTemplates().findIndex(t => t.name === name.trim())
-      sel.value = newIdx >= 0 ? String(newIdx) : ''
-    }
+    const saved = _templates.find(t => t.name === name.trim())
+    if (sel && saved) sel.value = saved.id
   })
 
   // Delete template
-  document.getElementById('em-tpl-delete')?.addEventListener('click', () => {
+  document.getElementById('em-tpl-delete')?.addEventListener('click', async () => {
+    if (!_sb) return
     const sel = document.getElementById('em-tpl-select')
-    const idx = parseInt(sel?.value)
-    if (isNaN(idx)) return
-    const tpls = loadTemplates()
-    const name = tpls[idx]?.name
-    if (!name || !confirm(`Delete template "${name}"?`)) return
-    tpls.splice(idx, 1)
-    saveTemplates(tpls)
-    refreshTemplateSelect()
+    const id  = sel?.value
+    if (!id) return
+    const tpl = _templates.find(t => t.id === id)
+    if (!tpl || !confirm(`Delete template "${tpl.name}"?`)) return
+    const { error } = await _sb.from('cp_email_templates').delete().eq('id', id)
+    if (error) { alert('Error deleting template'); return }
+    await refreshTemplateSelect()
+  })
+
+  // Preview
+  document.getElementById('em-preview-btn')?.addEventListener('click', () => {
+    const html    = getEditorHtml()
+    const subject = document.getElementById('em-subject')?.value || ''
+    const frame   = document.getElementById('em-preview-frame')
+    const overlay = document.getElementById('em-preview-overlay')
+    if (!frame || !overlay) return
+    frame.srcdoc = `<!DOCTYPE html><html><head>
+      <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+      <style>
+        body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+               font-size: 15px; line-height: 1.6; color: #111; background: #fff; }
+        img  { max-width: 100%; height: auto; }
+        a    { color: #6d28d9; }
+      </style></head><body>${html}</body></html>`
+    overlay.style.display = 'flex'
+  })
+
+  document.getElementById('em-preview-close')?.addEventListener('click', () => {
+    document.getElementById('em-preview-overlay').style.display = 'none'
+  })
+
+  document.getElementById('em-preview-overlay')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget)
+      document.getElementById('em-preview-overlay').style.display = 'none'
+  })
+
+  // Desktop / mobile size toggle in preview
+  document.querySelectorAll('.em-size-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.em-size-btn').forEach(b => b.classList.remove('active'))
+      btn.classList.add('active')
+      const frame = document.getElementById('em-preview-frame')
+      if (frame) frame.style.width = btn.dataset.width
+    })
   })
 
   // Send
