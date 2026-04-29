@@ -118,7 +118,7 @@ function postCardHTML(post) {
     ? new Date(post.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : ''
   return `
-    <div class="post-card" data-id="${post.id}">
+    <div class="post-card" data-id="${post.id}" draggable="true">
       <div class="post-card-top">
         ${productBadgeHTML(post.product)}
         ${platformChipHTML(post.platform)}
@@ -525,12 +525,73 @@ document.addEventListener('keydown', e => {
   closePostModal(); closeHashtagModal(); closeCaptionModal()
 })
 
+// ── Drag and drop ─────────────────────────────────────────────────────────
+let dragPostId = null
+
+function initDragDrop() {
+  // Dragstart / dragend via delegation (cards are re-rendered)
+  document.addEventListener('dragstart', e => {
+    const card = e.target.closest('.post-card')
+    if (!card) return
+    dragPostId = card.dataset.id
+    e.dataTransfer.effectAllowed = 'move'
+    // Defer class add so the ghost image captures the un-dimmed card
+    requestAnimationFrame(() => card.classList.add('dragging'))
+  })
+
+  document.addEventListener('dragend', e => {
+    const card = e.target.closest('.post-card')
+    if (card) card.classList.remove('dragging')
+    document.querySelectorAll('.pipeline-col.drag-over')
+      .forEach(col => col.classList.remove('drag-over'))
+    dragPostId = null
+  })
+
+  // Columns are static — wire them up once
+  document.querySelectorAll('.pipeline-col').forEach(col => {
+    col.addEventListener('dragover', e => {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      col.classList.add('drag-over')
+    })
+
+    col.addEventListener('dragleave', e => {
+      if (!col.contains(e.relatedTarget)) col.classList.remove('drag-over')
+    })
+
+    col.addEventListener('drop', async e => {
+      e.preventDefault()
+      col.classList.remove('drag-over')
+      if (!dragPostId) return
+
+      const newStatus = col.dataset.status
+      const post = data.posts.find(p => p.id === dragPostId)
+      if (!post || post.status === newStatus) return
+
+      // Optimistic update — feels instant
+      post.status = newStatus
+      renderPipeline()
+
+      const { error } = await sb.from('cp_posts')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', dragPostId)
+
+      if (error) {
+        showToast('Error moving post')
+        await fetchPosts()
+        renderPipeline()
+      }
+    })
+  })
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 async function init() {
   setLoading(true)
   const ok = await fetchAll()
   setLoading(false)
   if (ok) render()
+  initDragDrop()
 }
 
 init()
