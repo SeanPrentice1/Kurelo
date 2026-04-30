@@ -7,7 +7,7 @@ const { createClient } = window.supabase
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 // ── Local cache ───────────────────────────────────────────────────────────
-let data = { posts: [], hashtags: [], captions: [] }
+let data = { posts: [], hashtags: [], captions: [], tags: [] }
 
 // ── State ─────────────────────────────────────────────────────────────────
 const state = {
@@ -20,6 +20,9 @@ const state = {
   editingPostId: null,
   editingCaptionId: null,
 }
+
+let _editingTagId    = null
+let _selectedTagIds  = new Set()
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const PLATFORM_LABELS = { instagram: 'Instagram', tiktok: 'TikTok', linkedin: 'LinkedIn', reddit: 'Reddit' }
@@ -60,17 +63,25 @@ function setLoading(on) {
 
 // ── Data fetching ─────────────────────────────────────────────────────────
 async function fetchAll() {
-  const [{ data: posts, error: e1 }, { data: hashtags, error: e2 }, { data: captions, error: e3 }] =
+  const [{ data: posts, error: e1 }, { data: hashtags, error: e2 }, { data: captions, error: e3 }, { data: tags, error: e4 }] =
     await Promise.all([
       sb.from('cp_posts').select('*').order('created_at'),
       sb.from('cp_hashtags').select('*').order('created_at'),
       sb.from('cp_captions').select('*').order('created_at'),
+      sb.from('cp_tags').select('*').order('created_at'),
     ])
-  if (e1 || e2 || e3) { showToast('Error loading data'); return false }
+  if (e1 || e2 || e3 || e4) { showToast('Error loading data'); return false }
   data.posts    = posts    ?? []
   data.hashtags = hashtags ?? []
   data.captions = captions ?? []
+  data.tags     = tags     ?? []
   return true
+}
+
+async function fetchTags() {
+  const { data: rows, error } = await sb.from('cp_tags').select('*').order('created_at')
+  if (error) { showToast('Error loading tags'); return }
+  data.tags = rows ?? []
 }
 
 async function fetchPosts() {
@@ -98,6 +109,7 @@ function render() {
   else if (state.view === 'month') renderMonth()
   renderHashtags()
   renderCaptions()
+  renderTagLibrary()
 }
 
 // ── Pipeline ──────────────────────────────────────────────────────────────
@@ -117,6 +129,12 @@ function postCardHTML(post) {
   const dateStr = post.scheduled_date
     ? new Date(post.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : ''
+  const tagIds = post.tag_ids || []
+  const flairsHTML = tagIds.map(tid => {
+    const tag = data.tags.find(t => t.id === tid)
+    if (!tag) return ''
+    return `<span class="post-card-flair" style="--tag-color:${tag.color}">${escHtml(tag.name)}</span>`
+  }).filter(Boolean).join('')
   return `
     <div class="post-card" data-id="${post.id}" draggable="true">
       <div class="post-card-top">
@@ -124,8 +142,36 @@ function postCardHTML(post) {
         ${platformChipHTML(post.platform)}
       </div>
       <div class="post-card-title">${escHtml(post.title || 'Untitled')}</div>
+      ${flairsHTML ? `<div class="post-card-flairs">${flairsHTML}</div>` : ''}
       ${dateStr ? `<div class="post-card-date">${dateStr}</div>` : ''}
     </div>`
+}
+
+// ── Tag Library ───────────────────────────────────────────────────────────
+function renderTagLibrary() {
+  const container = document.getElementById('tag-library-chips')
+  if (!container) return
+  container.innerHTML = data.tags.length
+    ? data.tags.map(t => `
+        <div class="tag-library-chip" data-tag-lib-id="${t.id}" style="--tag-color:${t.color}">
+          <span class="tag-flair-dot"></span>
+          ${escHtml(t.name)}
+          <span class="tag-lib-edit">✎</span>
+        </div>`).join('')
+    : `<div class="empty-state" style="padding:6px 0;align-items:flex-start">No tags yet — create one to label your posts.</div>`
+}
+
+function renderPostTagPicker() {
+  const container = document.getElementById('post-tag-picker')
+  if (!container) return
+  if (!data.tags.length) {
+    container.innerHTML = `<span class="tag-picker-empty">No tags yet — create them in the Tag Library below.</span>`
+    return
+  }
+  container.innerHTML = data.tags.map(t => {
+    const sel = _selectedTagIds.has(t.id)
+    return `<button class="post-tag-chip${sel ? ' selected' : ''}" data-toggle-tag="${t.id}" style="--tag-color:${t.color}">${escHtml(t.name)}</button>`
+  }).join('')
 }
 
 // ── Week view ─────────────────────────────────────────────────────────────
@@ -255,6 +301,8 @@ function openPostModal(post = null, defaultStatus = 'idea') {
   document.getElementById('post-date').value     = post?.scheduled_date ?? ''
   const productVal = post?.product ?? 'rostura'
   document.querySelectorAll('input[name="post-product"]').forEach(r => { r.checked = r.value === productVal })
+  _selectedTagIds = new Set(post?.tag_ids ?? [])
+  renderPostTagPicker()
   document.getElementById('post-delete-btn').style.display = post ? '' : 'none'
   document.getElementById('post-modal-overlay').classList.remove('hidden')
   setTimeout(() => {
@@ -289,6 +337,7 @@ async function savePost() {
     caption:        document.getElementById('post-caption').value.trim(),
     notes:          _notesQuill ? _notesQuill.root.innerHTML : '',
     scheduled_date: document.getElementById('post-date').value || null,
+    tag_ids:        [..._selectedTagIds],
   }
 
   const btn = document.getElementById('post-save-btn')
@@ -411,6 +460,60 @@ async function deleteCaption() {
   renderCaptions()
 }
 
+// ── Tag Modal ─────────────────────────────────────────────────────────────
+function openTagModal(tag = null) {
+  _editingTagId = tag?.id ?? null
+  document.getElementById('tag-modal-title').textContent = tag ? 'Edit Tag' : 'New Tag'
+  document.getElementById('tag-name-input').value  = tag?.name  ?? ''
+  document.getElementById('tag-color-input').value = tag?.color ?? '#8b5cf6'
+  document.getElementById('tag-delete-btn').style.display = tag ? '' : 'none'
+  document.getElementById('tag-modal-overlay').classList.remove('hidden')
+  setTimeout(() => document.getElementById('tag-name-input').focus(), 50)
+}
+
+function closeTagModal() {
+  document.getElementById('tag-modal-overlay').classList.add('hidden')
+  _editingTagId = null
+}
+
+async function saveTag() {
+  const name  = document.getElementById('tag-name-input').value.trim()
+  if (!name) { document.getElementById('tag-name-input').focus(); return }
+  const color = document.getElementById('tag-color-input').value
+
+  const btn = document.getElementById('tag-save-btn')
+  btn.textContent = 'Saving…'; btn.disabled = true
+
+  let error
+  if (_editingTagId) {
+    ;({ error } = await sb.from('cp_tags').update({ name, color }).eq('id', _editingTagId))
+  } else {
+    ;({ error } = await sb.from('cp_tags').insert({ name, color }))
+  }
+
+  btn.textContent = 'Save Tag'; btn.disabled = false
+  if (error) { showToast('Error saving tag'); return }
+
+  closeTagModal()
+  await fetchTags()
+  renderTagLibrary()
+  renderPostTagPicker()
+  renderPipeline()
+}
+
+async function deleteTag() {
+  if (!_editingTagId || !confirm('Delete this tag? It will be removed from all posts.')) return
+  const { error } = await sb.from('cp_tags').delete().eq('id', _editingTagId)
+  if (error) { showToast('Error deleting tag'); return }
+  data.posts.forEach(p => { p.tag_ids = (p.tag_ids || []).filter(id => id !== _editingTagId) })
+  _selectedTagIds.delete(_editingTagId)
+  closeTagModal()
+  await fetchTags()
+  renderTagLibrary()
+  renderPostTagPicker()
+  renderPipeline()
+}
+
 // ── Clipboard + Toast ─────────────────────────────────────────────────────
 function copyText(text) {
   navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard'))
@@ -480,6 +583,32 @@ document.addEventListener('click', e => {
     if (cap) openCaptionModal(cap)
     return
   }
+
+  const tagLibChip = e.target.closest('.tag-library-chip')
+  if (tagLibChip) {
+    const tag = data.tags.find(t => t.id === tagLibChip.dataset.tagLibId)
+    if (tag) openTagModal(tag)
+    return
+  }
+
+  const toggleTag = e.target.closest('[data-toggle-tag]')
+  if (toggleTag) {
+    const id = toggleTag.dataset.toggleTag
+    if (_selectedTagIds.has(id)) {
+      _selectedTagIds.delete(id)
+      toggleTag.classList.remove('selected')
+    } else {
+      _selectedTagIds.add(id)
+      toggleTag.classList.add('selected')
+    }
+    return
+  }
+
+  const presetBtn = e.target.closest('.tag-preset')
+  if (presetBtn) {
+    document.getElementById('tag-color-input').value = presetBtn.dataset.color
+    return
+  }
 })
 
 // View toggle
@@ -532,9 +661,21 @@ document.getElementById('month-prev').addEventListener('click', () => { state.mo
 document.getElementById('month-next').addEventListener('click', () => { state.monthOffset++; renderMonth() })
 document.getElementById('month-today').addEventListener('click', () => { state.monthOffset = 0; renderMonth() })
 
+document.getElementById('add-tag-btn').addEventListener('click', () => openTagModal())
+document.getElementById('tag-modal-close').addEventListener('click', closeTagModal)
+document.getElementById('tag-cancel-btn').addEventListener('click', closeTagModal)
+document.getElementById('tag-save-btn').addEventListener('click', saveTag)
+document.getElementById('tag-delete-btn').addEventListener('click', deleteTag)
+document.getElementById('tag-modal-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeTagModal()
+})
+document.getElementById('tag-name-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveTag()
+})
+
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return
-  closePostModal(); closeHashtagModal(); closeCaptionModal()
+  closePostModal(); closeHashtagModal(); closeCaptionModal(); closeTagModal()
 })
 
 // ── Drag and drop ─────────────────────────────────────────────────────────
