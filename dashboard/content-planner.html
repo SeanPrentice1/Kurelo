@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/dashboard/dashboard.css" />
   <link rel="stylesheet" href="/dashboard/content-planner.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" />
 </head>
 <body>
 
@@ -216,7 +217,9 @@
         </div>
         <div class="form-group">
           <label class="form-label">Notes</label>
-          <textarea class="form-textarea" id="post-notes" rows="2" placeholder="Internal notes…"></textarea>
+          <div class="notes-editor-wrap">
+            <div id="post-notes-editor"></div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -313,6 +316,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.js"></script>
   <script src="/dashboard/content-planner.js"></script>
 </body>
 </html>
