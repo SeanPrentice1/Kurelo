@@ -799,6 +799,87 @@
 
 .copied-toast.show { opacity: 1; }
 
+/* ── Notes Quill editor (dark theme) ── */
+.notes-editor-wrap {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.notes-editor-wrap .ql-toolbar.ql-snow {
+  background: var(--surface-3) !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  padding: 6px 8px;
+}
+
+.notes-editor-wrap .ql-container.ql-snow {
+  background: var(--surface-2) !important;
+  border: none !important;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+}
+
+.notes-editor-wrap .ql-editor {
+  color: var(--text) !important;
+  min-height: 140px;
+  max-height: 320px;
+  overflow-y: auto;
+  line-height: 1.65;
+  padding: 12px 14px;
+}
+
+.notes-editor-wrap .ql-editor.ql-blank::before {
+  color: var(--text-faint) !important;
+  font-style: normal;
+}
+
+.notes-editor-wrap .ql-editor h2 {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-faint) !important;
+  margin: 14px 0 4px !important;
+}
+
+.notes-editor-wrap .ql-editor h3 {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--text-muted) !important;
+  margin: 10px 0 3px !important;
+}
+
+.notes-editor-wrap .ql-editor p { margin: 0 0 6px; }
+
+.notes-editor-wrap .ql-editor ol,
+.notes-editor-wrap .ql-editor ul {
+  padding-left: 1.4em;
+  margin: 4px 0 8px;
+  color: var(--text-muted);
+}
+
+.notes-editor-wrap .ql-editor li { margin-bottom: 3px; color: var(--text-muted); }
+.notes-editor-wrap .ql-editor strong { color: var(--text); }
+
+/* Toolbar icon colours */
+.notes-editor-wrap .ql-snow .ql-stroke { stroke: var(--text-muted) !important; }
+.notes-editor-wrap .ql-snow .ql-fill   { fill:   var(--text-muted) !important; }
+.notes-editor-wrap .ql-snow .ql-picker  { color:  var(--text-muted) !important; }
+
+.notes-editor-wrap .ql-snow .ql-toolbar button:hover .ql-stroke { stroke: var(--text) !important; }
+.notes-editor-wrap .ql-snow .ql-toolbar button.ql-active .ql-stroke { stroke: var(--kurelo) !important; }
+.notes-editor-wrap .ql-snow .ql-toolbar button.ql-active .ql-fill   { fill:   var(--kurelo) !important; }
+
+.notes-editor-wrap .ql-snow .ql-picker-label { border-color: transparent !important; }
+.notes-editor-wrap .ql-snow .ql-picker-options {
+  background: var(--surface-2) !important;
+  border-color: var(--border-light) !important;
+  border-radius: 6px;
+}
+.notes-editor-wrap .ql-snow .ql-picker-item { color: var(--text-muted) !important; }
+.notes-editor-wrap .ql-snow .ql-picker-item:hover { color: var(--text) !important; }
+
 /* ── Loading overlay ── */
 .cp-loading {
   position: fixed;

@@ -249,7 +249,7 @@ function openPostModal(post = null, defaultStatus = 'idea') {
   document.getElementById('post-modal-title').textContent = post ? 'Edit Post' : 'New Post'
   document.getElementById('post-title').value   = post?.title    ?? ''
   document.getElementById('post-caption').value = post?.caption  ?? ''
-  document.getElementById('post-notes').value   = post?.notes    ?? ''
+  // notes are set into Quill after the modal becomes visible (see setTimeout below)
   document.getElementById('post-platform').value = post?.platform ?? 'instagram'
   document.getElementById('post-status').value   = post?.status   ?? defaultStatus
   document.getElementById('post-date').value     = post?.scheduled_date ?? ''
@@ -257,7 +257,19 @@ function openPostModal(post = null, defaultStatus = 'idea') {
   document.querySelectorAll('input[name="post-product"]').forEach(r => { r.checked = r.value === productVal })
   document.getElementById('post-delete-btn').style.display = post ? '' : 'none'
   document.getElementById('post-modal-overlay').classList.remove('hidden')
-  setTimeout(() => document.getElementById('post-title').focus(), 50)
+  setTimeout(() => {
+    initNotesQuill()
+    if (_notesQuill) {
+      const notes = post?.notes ?? ''
+      // Handle both legacy plain text and stored HTML
+      if (notes && !notes.startsWith('<')) {
+        _notesQuill.setText(notes)
+      } else {
+        _notesQuill.root.innerHTML = notes
+      }
+    }
+    document.getElementById('post-title').focus()
+  }, 50)
 }
 
 function closePostModal() {
@@ -275,7 +287,7 @@ async function savePost() {
     platform:       document.getElementById('post-platform').value,
     status:         document.getElementById('post-status').value,
     caption:        document.getElementById('post-caption').value.trim(),
-    notes:          document.getElementById('post-notes').value.trim(),
+    notes:          _notesQuill ? _notesQuill.root.innerHTML : '',
     scheduled_date: document.getElementById('post-date').value || null,
   }
 
@@ -526,6 +538,24 @@ document.addEventListener('keydown', e => {
 })
 
 // ── Drag and drop ─────────────────────────────────────────────────────────
+let _notesQuill = null
+
+function initNotesQuill() {
+  if (_notesQuill || typeof Quill === 'undefined') return
+  _notesQuill = new Quill('#post-notes-editor', {
+    theme: 'snow',
+    placeholder: 'Add structured notes — why it works, format, content breakdown…',
+    modules: {
+      toolbar: [
+        ['bold', 'italic'],
+        [{ header: 2 }, { header: 3 }],
+        [{ list: 'ordered' }, { list: 'bullet' }],
+        ['clean'],
+      ],
+    },
+  })
+}
+
 let dragPostId = null
 
 function initDragDrop() {
