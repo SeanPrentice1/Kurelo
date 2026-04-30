@@ -880,6 +880,33 @@
 .notes-editor-wrap .ql-snow .ql-picker-item { color: var(--text-muted) !important; }
 .notes-editor-wrap .ql-snow .ql-picker-item:hover { color: var(--text) !important; }
 
+/* ── Platform multi-toggle (post modal) ── */
+.platform-toggle {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.plat-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.plat-btn:hover { color: var(--text-muted); border-color: var(--border-light); }
+
+.plat-btn[data-plat="instagram"].active { background: rgba(225,48,108,0.12);  border-color: rgba(225,48,108,0.35); color: #e1306c; }
+.plat-btn[data-plat="tiktok"].active    { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.2); color: #cbd5e1; }
+.plat-btn[data-plat="linkedin"].active  { background: rgba(0,119,181,0.15);   border-color: rgba(0,119,181,0.35);  color: #5badda; }
+.plat-btn[data-plat="reddit"].active    { background: rgba(255,87,0,0.12);    border-color: rgba(255,87,0,0.3);    color: #ff6b35; }
+
 /* ════════════════════════════════════════
    TAGS
 ════════════════════════════════════════ */

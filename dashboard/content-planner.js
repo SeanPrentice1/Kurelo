@@ -48,10 +48,15 @@ function isSameDay(a, b) {
     a.getDate() === b.getDate()
 }
 
+function postPlatforms(post) {
+  if (post.platforms?.length) return post.platforms
+  return post.platform ? [post.platform] : []
+}
+
 function filteredPosts() {
   return data.posts.filter(p => {
     if (state.productFilter !== 'all' && p.product !== state.productFilter) return false
-    if (state.platformFilter !== 'all' && p.platform !== state.platformFilter) return false
+    if (state.platformFilter !== 'all' && !postPlatforms(p).includes(state.platformFilter)) return false
     return true
   })
 }
@@ -135,11 +140,13 @@ function postCardHTML(post) {
     if (!tag) return ''
     return `<span class="post-card-flair" style="--tag-color:${tag.color}">${escHtml(tag.name)}</span>`
   }).filter(Boolean).join('')
+  const plats = postPlatforms(post)
+  const platformsHTML = plats.map(p => platformChipHTML(p)).join('')
   return `
     <div class="post-card" data-id="${post.id}" draggable="true">
       <div class="post-card-top">
         ${productBadgeHTML(post.product)}
-        ${platformChipHTML(post.platform)}
+        ${platformsHTML}
       </div>
       <div class="post-card-title">${escHtml(post.title || 'Untitled')}</div>
       ${flairsHTML ? `<div class="post-card-flairs">${flairsHTML}</div>` : ''}
@@ -296,7 +303,10 @@ function openPostModal(post = null, defaultStatus = 'idea') {
   document.getElementById('post-title').value   = post?.title    ?? ''
   document.getElementById('post-caption').value = post?.caption  ?? ''
   // notes are set into Quill after the modal becomes visible (see setTimeout below)
-  document.getElementById('post-platform').value = post?.platform ?? 'instagram'
+  const activePlats = post?.platforms?.length ? post.platforms : (post?.platform ? [post.platform] : [])
+  document.querySelectorAll('#post-platforms .plat-btn').forEach(btn => {
+    btn.classList.toggle('active', activePlats.includes(btn.dataset.plat))
+  })
   document.getElementById('post-status').value   = post?.status   ?? defaultStatus
   document.getElementById('post-date').value     = post?.scheduled_date ?? ''
   const productVal = post?.product ?? 'rostura'
@@ -332,7 +342,7 @@ async function savePost() {
   const payload = {
     title,
     product:        document.querySelector('input[name="post-product"]:checked')?.value ?? 'rostura',
-    platform:       document.getElementById('post-platform').value,
+    platforms:      [...document.querySelectorAll('#post-platforms .plat-btn.active')].map(b => b.dataset.plat),
     status:         document.getElementById('post-status').value,
     caption:        document.getElementById('post-caption').value.trim(),
     notes:          _notesQuill ? _notesQuill.root.innerHTML : '',
@@ -590,6 +600,9 @@ document.addEventListener('click', e => {
     if (tag) openTagModal(tag)
     return
   }
+
+  const platBtn = e.target.closest('.plat-btn')
+  if (platBtn) { platBtn.classList.toggle('active'); return }
 
   const toggleTag = e.target.closest('[data-toggle-tag]')
   if (toggleTag) {
