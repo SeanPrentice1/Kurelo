@@ -159,6 +159,14 @@
         <div class="caption-list" id="caption-list"></div>
       </section>
 
+      <section class="bank-section tags-bank-section">
+        <div class="section-header">
+          <h2 class="section-title">⬡ Tag Library</h2>
+          <button class="add-btn small" id="add-tag-btn">+ New Tag</button>
+        </div>
+        <div class="tag-library-chips" id="tag-library-chips"></div>
+      </section>
+
     </div>
 
   </main>
@@ -194,6 +202,10 @@
               <option value="reddit">Reddit</option>
             </select>
           </div>
+        </div>
+        <div class="form-group" id="post-tags-group">
+          <label class="form-label">Tags</label>
+          <div class="post-tag-picker" id="post-tag-picker"></div>
         </div>
         <div class="form-row two">
           <div class="form-group">
@@ -304,6 +316,46 @@
         <div style="flex:1"></div>
         <button class="modal-btn secondary" id="caption-cancel-btn">Cancel</button>
         <button class="modal-btn primary" id="caption-save-btn">Save Caption</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       TAG MODAL
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay hidden" id="tag-modal-overlay">
+    <div class="modal small" id="tag-modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="tag-modal-title">New Tag</h3>
+        <button class="modal-close" id="tag-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Tag Name</label>
+          <input class="form-input" id="tag-name-input" type="text" placeholder="e.g. Campaign, Promo, Series…" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Colour</label>
+          <div class="tag-color-wrap">
+            <input type="color" id="tag-color-input" value="#8b5cf6" class="tag-color-swatch" />
+            <div class="tag-color-presets">
+              <button class="tag-preset" data-color="#8b5cf6" style="background:#8b5cf6"></button>
+              <button class="tag-preset" data-color="#3b82f6" style="background:#3b82f6"></button>
+              <button class="tag-preset" data-color="#10b981" style="background:#10b981"></button>
+              <button class="tag-preset" data-color="#f59e0b" style="background:#f59e0b"></button>
+              <button class="tag-preset" data-color="#ef4444" style="background:#ef4444"></button>
+              <button class="tag-preset" data-color="#ec4899" style="background:#ec4899"></button>
+              <button class="tag-preset" data-color="#14b8a6" style="background:#14b8a6"></button>
+              <button class="tag-preset" data-color="#f97316" style="background:#f97316"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn danger" id="tag-delete-btn" style="display:none">Delete</button>
+        <div style="flex:1"></div>
+        <button class="modal-btn secondary" id="tag-cancel-btn">Cancel</button>
+        <button class="modal-btn primary" id="tag-save-btn">Save Tag</button>
       </div>
     </div>
   </div>

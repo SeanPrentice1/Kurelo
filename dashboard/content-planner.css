@@ -880,6 +880,159 @@
 .notes-editor-wrap .ql-snow .ql-picker-item { color: var(--text-muted) !important; }
 .notes-editor-wrap .ql-snow .ql-picker-item:hover { color: var(--text) !important; }
 
+/* ════════════════════════════════════════
+   TAGS
+════════════════════════════════════════ */
+
+/* Tags bank section spans full width */
+.tags-bank-section {
+  grid-column: 1 / -1;
+}
+
+.tag-library-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  align-items: center;
+}
+
+.tag-library-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tag-color, var(--kurelo));
+  background: color-mix(in srgb, var(--tag-color, var(--kurelo)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tag-color, var(--kurelo)) 28%, transparent);
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s;
+}
+
+.tag-library-chip:hover { opacity: 0.72; }
+
+.tag-flair-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.tag-lib-edit {
+  font-size: 10px;
+  opacity: 0;
+  margin-left: 2px;
+  transition: opacity 0.15s;
+}
+
+.tag-library-chip:hover .tag-lib-edit { opacity: 0.55; }
+
+/* Post tag picker (inside modal) */
+.post-tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  align-items: center;
+}
+
+.tag-picker-empty {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.post-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--tag-color, var(--kurelo)) 30%, transparent);
+  background: transparent;
+  color: var(--text-faint);
+  transition: all 0.15s;
+}
+
+.post-tag-chip.selected {
+  background: color-mix(in srgb, var(--tag-color, var(--kurelo)) 14%, transparent);
+  border-color: color-mix(in srgb, var(--tag-color, var(--kurelo)) 50%, transparent);
+  color: var(--tag-color, var(--kurelo));
+}
+
+.post-tag-chip:hover:not(.selected) {
+  border-color: color-mix(in srgb, var(--tag-color, var(--kurelo)) 45%, transparent);
+  color: var(--text-muted);
+}
+
+/* Post card flair chips */
+.post-card-flairs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.post-card-flair {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--tag-color, var(--kurelo));
+  background: color-mix(in srgb, var(--tag-color, var(--kurelo)) 12%, transparent);
+  border-left: 2px solid var(--tag-color, var(--kurelo));
+  white-space: nowrap;
+}
+
+/* Tag color picker row */
+.tag-color-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tag-color-swatch {
+  width: 48px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.tag-color-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag-preset {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+
+.tag-preset:hover {
+  border-color: rgba(255,255,255,0.5);
+  transform: scale(1.15);
+}
+
 /* ── Loading overlay ── */
 .cp-loading {
   position: fixed;
