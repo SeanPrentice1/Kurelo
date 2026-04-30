@@ -343,6 +343,7 @@ async function savePost() {
     title,
     product:        document.querySelector('input[name="post-product"]:checked')?.value ?? 'rostura',
     platforms:      [...document.querySelectorAll('#post-platforms .plat-btn.active')].map(b => b.dataset.plat),
+    platform:       document.querySelector('#post-platforms .plat-btn.active')?.dataset.plat ?? 'instagram',
     status:         document.getElementById('post-status').value,
     caption:        document.getElementById('post-caption').value.trim(),
     notes:          _notesQuill ? _notesQuill.root.innerHTML : '',
