@@ -1,8 +1,18 @@
 {
   "outputDirectory": ".",
+  "headers": [
+    {
+      "source": "/dashboard/(.*)\\.css",
+      "headers": [{ "key": "Content-Type", "value": "text/css; charset=utf-8" }]
+    },
+    {
+      "source": "/dashboard/(.*)\\.js",
+      "headers": [{ "key": "Content-Type", "value": "application/javascript; charset=utf-8" }]
+    }
+  ],
   "rewrites": [
-    { "source": "/dashboard",          "destination": "/dashboard/index.html" },
-    { "source": "/dashboard/inbox",    "destination": "/dashboard/inbox.html" },
-    { "source": "/dashboard/campaigns","destination": "/dashboard/campaign.html" }
+    { "source": "/dashboard",           "destination": "/dashboard/index.html" },
+    { "source": "/dashboard/inbox",     "destination": "/dashboard/inbox.html" },
+    { "source": "/dashboard/campaigns", "destination": "/dashboard/campaign.html" }
   ]
 }
