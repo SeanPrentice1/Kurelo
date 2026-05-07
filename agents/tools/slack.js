@@ -82,7 +82,7 @@ export function approvalBlocks({ contentId, campaignName, agent, taskType, platf
     },
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: `\`\`\`${output}\`\`\`` },
+      text: { type: 'mrkdwn', text: `\`\`\`${output.length > 2800 ? output.substring(0, 2800) + '…' : output}\`\`\`` },
     },
   ]
 
