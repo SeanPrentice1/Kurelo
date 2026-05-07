@@ -1,0 +1,240 @@
+/* ── Inbox ─────────────────────────────────────────────────── */
+.inbox-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #f97316;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+}
+
+.inbox-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 0 24px;
+}
+
+.inbox-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.inbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  padding: 0 24px 40px;
+}
+
+.inbox-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 24px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.inbox-empty-icon {
+  font-size: 36px;
+}
+
+/* ── Inbox Card ──────────────────────────────────────────────── */
+.inbox-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.15s;
+}
+
+.inbox-card:hover {
+  border-color: var(--purple);
+}
+
+.inbox-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inbox-card-labels {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.inbox-card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.inbox-agent-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.inbox-age {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.inbox-card-campaign {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.inbox-card-hook {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.inbox-card-output {
+  font-size: 13px;
+  color: var(--text-secondary, #a1a1aa);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+.inbox-card-hashtags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.htag {
+  font-size: 11px;
+  color: var(--purple);
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.inbox-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.inbox-card-cta {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.inbox-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.inbox-approve,
+.inbox-reject {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+  font-family: inherit;
+}
+
+.inbox-approve {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.inbox-approve:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.25);
+  transform: translateY(-1px);
+}
+
+.inbox-reject {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.inbox-reject:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.22);
+  transform: translateY(-1px);
+}
+
+.inbox-approve:disabled,
+.inbox-reject:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Toast ───────────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+.toast-success { background: #166534; color: #bbf7d0; border: 1px solid #15803d; }
+.toast-info    { background: #1e1b4b; color: #c4b5fd; border: 1px solid #4f46e5; }
+.toast-error   { background: #7f1d1d; color: #fecaca; border: 1px solid #b91c1c; }
+
+/* ── Mobile ──────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .inbox-toolbar {
+    padding: 0 16px;
+    flex-direction: column;
+  }
+
+  .inbox-grid {
+    grid-template-columns: 1fr;
+    padding: 0 16px 40px;
+  }
+
+  .inbox-card-meta {
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .page-nav {
+    display: none;
+  }
+}

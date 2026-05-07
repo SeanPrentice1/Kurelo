@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Campaigns — Kurelo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/dashboard/dashboard.css" />
+  <link rel="stylesheet" href="/dashboard/inbox.css" />
+  <link rel="stylesheet" href="/dashboard/campaign.css" />
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <div class="header-left">
+      <svg class="header-logo" viewBox="0 0 32 32" fill="none">
+        <path d="M8 8 L15 16 L8 24"  stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M16 8 L23 16 L16 24" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/>
+      </svg>
+      <span class="header-title">Kurelo <span class="header-sub">Campaigns</span></span>
+    </div>
+    <div class="header-right">
+      <nav class="page-nav">
+        <a href="/dashboard/" class="page-nav-link">Dashboard</a>
+        <a href="/dashboard/content-planner.html" class="page-nav-link">Content Planner</a>
+        <a href="/dashboard/inbox.html" class="page-nav-link">Inbox</a>
+        <a href="/dashboard/campaign.html" class="page-nav-link active">Campaigns</a>
+      </nav>
+      <button class="refresh-btn" id="refresh-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+        </svg>
+        Refresh
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- ── Summary row ── -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">Active Campaigns</h2>
+        <span class="section-meta" id="campaign-updated"></span>
+      </div>
+      <div class="camp-summary-row" id="camp-summary">
+        <div class="camp-stat skeleton"><div class="camp-stat-val" id="stat-total">—</div><div class="camp-stat-label">Campaigns</div></div>
+        <div class="camp-stat skeleton"><div class="camp-stat-val" id="stat-pending">—</div><div class="camp-stat-label">Awaiting Approval</div></div>
+        <div class="camp-stat skeleton"><div class="camp-stat-val" id="stat-scheduled">—</div><div class="camp-stat-label">Queued to Buffer</div></div>
+        <div class="camp-stat skeleton"><div class="camp-stat-val" id="stat-posted">—</div><div class="camp-stat-label">Posted</div></div>
+      </div>
+    </section>
+
+    <!-- ── Filters ── -->
+    <div class="inbox-toolbar" style="margin-bottom:16px">
+      <div class="inbox-filters">
+        <button class="filter-btn active" data-filter="product" data-value="all">All</button>
+        <button class="filter-btn crevaxo" data-filter="product" data-value="crevaxo">Crevaxo</button>
+        <button class="filter-btn rostura" data-filter="product" data-value="rostura">Rostura</button>
+      </div>
+    </div>
+
+    <!-- ── Loading ── -->
+    <div id="camp-loading" class="inbox-empty">
+      <div class="inbox-empty-icon">⏳</div>
+      <p>Loading campaigns…</p>
+    </div>
+
+    <!-- ── Empty ── -->
+    <div id="camp-empty" class="inbox-empty" style="display:none">
+      <div class="inbox-empty-icon">🚀</div>
+      <p>No active campaigns yet. Send <code>/kurelo [brief]</code> in Slack to start one.</p>
+    </div>
+
+    <!-- ── Campaign list ── -->
+    <div id="camp-list" style="display:none; padding:0 24px 40px; display:none; flex-direction:column; gap:24px"></div>
+
+  </main>
+
+  <div id="toast" class="toast" style="display:none"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/dashboard/campaign.js"></script>
+</body>
+</html>

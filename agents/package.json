@@ -1,0 +1,20 @@
+{
+  "name": "kurelo-agents",
+  "version": "1.0.0",
+  "description": "Agentic marketing system for Kurelo — orchestrator, sub-agents, and Slack bot",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@slack/bolt": "^4.4.0",
+    "@supabase/supabase-js": "^2.47.0",
+    "dotenv": "^16.4.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
