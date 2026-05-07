@@ -1,64 +1,77 @@
-const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
+const BASE_URL = 'https://api.nanobananaapi.ai/v1'
 
 export const MODELS = {
-  FAST: 'gemini-2.0-flash-exp',
-  PRO:  'gemini-2.0-flash-exp', // same model; PRO path adds text-rendering hints to prompt
+  FAST: 'gemini-3.1-flash-image-preview', // Nano Banana 2 — default
+  PRO:  'gemini-3-pro-image-preview',      // Nano Banana Pro — precise text rendering
 }
 
-// Aspect ratios embedded in the prompt — Gemini Flash image gen does not accept a ratio param
+// Map platform → aspect ratio string and pixel dimensions
 export const ASPECT_RATIOS = {
-  instagram:  '1:1 (square)',
-  tiktok:     '9:16 (vertical)',
-  stories:    '9:16 (vertical)',
-  linkedin:   '16:9 (landscape)',
-  twitter:    '16:9 (landscape)',
-  meta_ads:   '1:1 (square)',
-  google_ads: '16:9 (landscape)',
+  instagram:  { ratio: '1:1',    width: 1024, height: 1024 },
+  tiktok:     { ratio: '9:16',   width: 1080, height: 1920 },
+  stories:    { ratio: '9:16',   width: 1080, height: 1920 },
+  linkedin:   { ratio: '1.91:1', width: 1200, height: 628  },
+  twitter:    { ratio: '16:9',   width: 1200, height: 675  },
+  meta_ads:   { ratio: '1:1',    width: 1024, height: 1024 },
+  google_ads: { ratio: '1.91:1', width: 1200, height: 628  },
 }
 
-function apiKey() {
+function headers() {
   const key = process.env.NANO_BANANA_API_KEY
   if (!key) throw new Error('NANO_BANANA_API_KEY is not set')
-  return key
+  return {
+    'Authorization': `Bearer ${key}`,
+    'Content-Type':  'application/json',
+  }
 }
 
 /**
- * Generate an image via the Google AI Gemini image generation API.
- * Returns { imageBuffer } — a Buffer ready for Supabase upload.
+ * Generate an image via the Nano Banana API.
+ * Returns { imageUrl, imageBuffer } — imageBuffer is a Buffer ready for Supabase upload.
  */
 export async function generateImage({ prompt, model = MODELS.FAST, platform = null }) {
-  const ratio = ASPECT_RATIOS[platform?.toLowerCase()] ?? '1:1 (square)'
-  const fullPrompt = `${prompt} Compose the image in a ${ratio} aspect ratio.`
+  const dims = ASPECT_RATIOS[platform?.toLowerCase()] ?? { ratio: '1:1', width: 1024, height: 1024 }
 
-  const res = await fetch(
-    `${BASE_URL}/models/${model}:generateContent?key=${apiKey()}`,
-    {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: fullPrompt }] }],
-        generationConfig: { responseModalities: ['IMAGE'] },
-      }),
-    }
-  )
+  const res = await fetch(`${BASE_URL}/generate`, {
+    method:  'POST',
+    headers: headers(),
+    body: JSON.stringify({
+      model,
+      prompt,
+      aspect_ratio:  dims.ratio,
+      width:         dims.width,
+      height:        dims.height,
+      output_format: 'url',
+    }),
+  })
 
   if (!res.ok) {
     const body = await res.text()
-    throw new Error(`Gemini image error ${res.status}: ${body}`)
+    throw new Error(`Nano Banana API error ${res.status}: ${body}`)
   }
 
   const data = await res.json()
-  const part = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData)
-  if (!part) throw new Error(`Gemini returned no image data: ${JSON.stringify(data).substring(0, 300)}`)
 
-  const b64 = part.inlineData.data.replace(/^data:image\/\w+;base64,/, '')
-  return { imageBuffer: Buffer.from(b64, 'base64') }
+  let imageBuffer
+  let imageUrl
+
+  if (data.url) {
+    imageUrl = data.url
+    const imgRes = await fetch(data.url)
+    imageBuffer = Buffer.from(await imgRes.arrayBuffer())
+  } else if (data.image) {
+    const b64 = data.image.replace(/^data:image\/\w+;base64,/, '')
+    imageBuffer = Buffer.from(b64, 'base64')
+    imageUrl = null
+  } else {
+    throw new Error('Nano Banana API returned no image data')
+  }
+
+  return { imageUrl, imageBuffer }
 }
 
 /**
  * Choose model based on whether the brief requires precise text rendering in the image.
- * Both use the same underlying model; PRO sets text_in_image in metadata which
- * buildImagePrompt() in the designer agent picks up to add text-rendering direction.
  */
 export function selectModel(metadata = {}) {
   return metadata.text_in_image ? MODELS.PRO : MODELS.FAST
