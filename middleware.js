@@ -1,5 +1,9 @@
 export const config = {
-  matcher: ['/dashboard', '/dashboard/:path*', '/api/health', '/api/stripe', '/api/posthog', '/api/crevaxo', '/api/rostura', '/api/email', '/api/agents/:path*'],
+  matcher: [
+    '/dashboard',
+    '/dashboard/((?!.*\\.(?:css|js|ico|png|jpg|svg|woff2?|ttf|eot)$).*)',
+    '/api/health', '/api/stripe', '/api/posthog', '/api/crevaxo', '/api/rostura', '/api/email', '/api/agents/:path*',
+  ],
 }
 
 export default function middleware(request) {
