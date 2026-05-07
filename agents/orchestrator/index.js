@@ -61,6 +61,7 @@ export async function runOrchestrator({ brief, product, channelId, userId, slack
   // 5. Dispatch tasks, respecting depends_on dependencies
   await dispatchTasks({
     tasks:        plan.tasks,
+    product,
     campaignId:   campaign.id,
     campaignName: plan.campaign_name,
     channelId,
@@ -101,9 +102,11 @@ async function generatePlan({ brief, product, memoryText }) {
   }
 }
 
-async function dispatchTasks({ tasks, campaignId, campaignName, channelId, slackClient }) {
+async function dispatchTasks({ tasks, product, campaignId, campaignName, channelId, slackClient }) {
   // Exclude scheduler tasks — they're triggered by approvals, not by the plan
-  const workTasks = tasks.filter(t => t.agent !== 'scheduler')
+  const workTasks = tasks
+    .filter(t => t.agent !== 'scheduler')
+    .map(t => ({ ...t, product: t.product ?? product }))
   const outputs   = new Map() // taskId → agent output (for dependency context)
   const remaining = [...workTasks]
 
