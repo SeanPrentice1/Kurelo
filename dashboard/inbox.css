@@ -1,4 +1,31 @@
-/* ── Inbox ─────────────────────────────────────────────────── */
+/* ── Page nav ────────────────────────────────────────────────── */
+.page-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.page-nav-link {
+  padding: 5px 11px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+}
+
+.page-nav-link:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.page-nav-link.active {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+/* ── Inbox badge ─────────────────────────────────────────────── */
 .inbox-badge {
   display: inline-flex;
   align-items: center;
@@ -6,19 +33,19 @@
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  background: #f97316;
+  background: var(--crevaxo);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
   border-radius: 10px;
 }
 
+/* ── Toolbar & filters ───────────────────────────────────────── */
 .inbox-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 24px;
-  padding: 0 24px;
 }
 
 .inbox-filters {
@@ -27,11 +54,48 @@
   gap: 6px;
 }
 
+.filter-btn {
+  padding: 5px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.filter-btn:hover {
+  color: var(--text);
+  border-color: var(--border-light);
+  background: var(--surface-2);
+}
+
+.filter-btn.active {
+  color: var(--text);
+  border-color: var(--kurelo);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.filter-btn.crevaxo.active {
+  color: var(--crevaxo);
+  border-color: rgba(249, 115, 22, 0.4);
+  background: rgba(249, 115, 22, 0.1);
+}
+
+.filter-btn.rostura.active {
+  color: var(--rostura);
+  border-color: rgba(20, 184, 166, 0.4);
+  background: rgba(20, 184, 166, 0.1);
+}
+
+/* ── Grid & empty state ──────────────────────────────────────── */
 .inbox-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
-  padding: 0 24px 40px;
 }
 
 .inbox-empty {
@@ -41,7 +105,7 @@
   justify-content: center;
   gap: 12px;
   padding: 80px 24px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -51,7 +115,7 @@
 
 /* ── Inbox Card ──────────────────────────────────────────────── */
 .inbox-card {
-  background: var(--card);
+  background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
@@ -62,7 +126,7 @@
 }
 
 .inbox-card:hover {
-  border-color: var(--purple);
+  border-color: var(--border-light);
 }
 
 .inbox-card-header {
@@ -96,12 +160,12 @@
 
 .inbox-age {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--text-faint);
 }
 
 .inbox-card-campaign {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--text-faint);
 }
 
 .inbox-card-hook {
@@ -113,7 +177,7 @@
 
 .inbox-card-output {
   font-size: 13px;
-  color: var(--text-secondary, #a1a1aa);
+  color: var(--text-muted);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
@@ -131,12 +195,25 @@
 
 .htag {
   font-size: 11px;
-  color: var(--purple);
+  color: var(--kurelo);
   background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
   border-radius: 4px;
   padding: 2px 6px;
 }
 
+/* ── Platform chip ───────────────────────────────────────────── */
+.platform-chip {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+}
+
+/* ── Card footer & actions ───────────────────────────────────── */
 .inbox-card-footer {
   display: flex;
   align-items: center;
@@ -148,7 +225,7 @@
 
 .inbox-card-cta {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--text-faint);
   font-style: italic;
 }
 
@@ -162,7 +239,6 @@
 .inbox-reject {
   padding: 6px 14px;
   border-radius: 8px;
-  border: none;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -171,24 +247,24 @@
 }
 
 .inbox-approve {
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--green);
+  border: 1px solid rgba(34, 197, 94, 0.25);
 }
 
 .inbox-approve:hover:not(:disabled) {
-  background: rgba(34, 197, 94, 0.25);
+  background: rgba(34, 197, 94, 0.18);
   transform: translateY(-1px);
 }
 
 .inbox-reject {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 .inbox-reject:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.18);
   transform: translateY(-1px);
 }
 
@@ -212,21 +288,14 @@
   box-shadow: 0 4px 24px rgba(0,0,0,0.4);
 }
 
-.toast-success { background: #166534; color: #bbf7d0; border: 1px solid #15803d; }
-.toast-info    { background: #1e1b4b; color: #c4b5fd; border: 1px solid #4f46e5; }
-.toast-error   { background: #7f1d1d; color: #fecaca; border: 1px solid #b91c1c; }
+.toast-success { background: rgba(34,197,94,0.15);  color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
+.toast-info    { background: rgba(139,92,246,0.15); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.3); }
+.toast-error   { background: rgba(239,68,68,0.15);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
 
 /* ── Mobile ──────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  .inbox-toolbar {
-    padding: 0 16px;
-    flex-direction: column;
-  }
-
-  .inbox-grid {
-    grid-template-columns: 1fr;
-    padding: 0 16px 40px;
-  }
+  .inbox-toolbar { flex-direction: column; }
+  .inbox-grid    { grid-template-columns: 1fr; }
 
   .inbox-card-meta {
     align-items: flex-start;
@@ -234,7 +303,5 @@
     gap: 8px;
   }
 
-  .page-nav {
-    display: none;
-  }
+  .page-nav { display: none; }
 }
