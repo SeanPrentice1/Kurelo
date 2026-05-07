@@ -1,12 +1,13 @@
 import { anthropic, MODELS } from '../tools/anthropic.js'
 import { buildMemoryContext, formatMemoryContext } from '../tools/memory.js'
 import { ORCHESTRATOR_SYSTEM_PROMPT } from '../prompts/orchestrator.js'
-import { planBlocks } from '../tools/slack.js'
+import { planBlocks, approvalBlocks } from '../tools/slack.js'
 import supabase from '../tools/supabase.js'
 import { runContentAgent } from '../content-agent/index.js'
 import { runAdsAgent } from '../ads-agent/index.js'
 import { runResearchAgent } from '../research-agent/index.js'
 import { runAnalyticsAgent } from '../analytics-agent/index.js'
+import { runDesignerAgent } from '../designer-agent/index.js'
 
 const AGENT_RUNNERS = {
   content:   runContentAgent,
@@ -14,6 +15,9 @@ const AGENT_RUNNERS = {
   research:  runResearchAgent,
   analytics: runAnalyticsAgent,
 }
+
+// Platforms that require a generated image — Reddit is text-only and skips the designer
+const VISUAL_PLATFORMS = new Set(['instagram', 'tiktok', 'linkedin', 'twitter', 'meta_ads', 'google_ads', 'stories'])
 
 /**
  * Main orchestrator entry point.
@@ -152,5 +156,41 @@ async function runTask({ task, campaignId, campaignName, channelId, slackClient,
     .map(dep => outputs.get(dep))
     .filter(Boolean)
 
-  return runner({ task, campaignId, campaignName, channelId, slackClient, dependencyContext })
+  const needsDesigner = task.agent === 'content' && VISUAL_PLATFORMS.has(task.platform?.toLowerCase())
+
+  const result = await runner({
+    task,
+    campaignId,
+    campaignName,
+    channelId,
+    slackClient,
+    dependencyContext,
+    ...(needsDesigner ? { skipSlack: true } : {}),
+  })
+
+  if (needsDesigner && result) {
+    await runDesignerAgent({ contentItem: result, campaignId, campaignName, channelId, slackClient })
+      .catch(async err => {
+        console.error('[orchestrator] Designer failed, falling back to copy-only:', err.message)
+        const msg = await slackClient.chat.postMessage({
+          channel: channelId,
+          text:    `Content ready for approval: ${task.type}`,
+          blocks:  approvalBlocks({
+            contentId:    result.id,
+            campaignName,
+            agent:        'content',
+            taskType:     task.type,
+            platform:     task.platform,
+            output:       result.output,
+            metadata:     result.metadata,
+          }),
+        })
+        await supabase
+          .from('content_log')
+          .update({ slack_ts: msg.ts })
+          .eq('id', result.id)
+      })
+  }
+
+  return result
 }
