@@ -1,13 +1,14 @@
 export const config = {
-  matcher: [
-    '/dashboard',
-    '/dashboard/((?!.*\\.(?:css|js|ico|png|jpg|svg|woff2?|ttf|eot)$).*)',
-    '/api/health', '/api/stripe', '/api/posthog', '/api/crevaxo', '/api/rostura', '/api/email', '/api/agents/:path*',
-  ],
+  matcher: ['/dashboard', '/dashboard/:path*', '/api/health', '/api/stripe', '/api/posthog', '/api/crevaxo', '/api/rostura', '/api/email', '/api/agents/:path*'],
 }
 
 export default function middleware(request) {
   const { pathname } = new URL(request.url)
+
+  // Pass static assets through without auth check
+  if (/\.(css|js|ico|png|jpg|jpeg|svg|woff2?|ttf|eot|map)$/.test(pathname)) {
+    return
+  }
 
   // Allow login page and auth endpoint through without a session check
   if (
