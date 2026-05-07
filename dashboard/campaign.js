@@ -1,9 +1,3 @@
-// ── Supabase ──────────────────────────────────────────────────
-const SUPABASE_URL      = 'https://ovmlohgptdiryvlwztxz.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92bWxvaGdwdGRpcnl2bHd6dHh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5ODQwNjYsImV4cCI6MjA5MTU2MDA2Nn0.oItHZhkUTmCPP9CO1-RacGyl8tD14pxdv71nxz6N3F4'
-const { createClient } = window.supabase
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-
 // ── State ─────────────────────────────────────────────────────
 let allCampaigns = []
 const filters = { product: 'all' }
@@ -29,32 +23,15 @@ const AGENT_EMOJI = { content: '✍️', ads: '📣', research: '🔍', analytic
 
 // ── Fetch ─────────────────────────────────────────────────────
 async function fetchCampaigns() {
-  const [campRes, contentRes] = await Promise.all([
-    sb.from('campaign_log')
-      .select('id, product, name, brief, status, budget_cents, spend_cents, created_at, updated_at')
-      .in('status', ['planning', 'active', 'paused'])
-      .order('created_at', { ascending: false })
-      .limit(20),
-    sb.from('content_log')
-      .select('id, campaign_id, product, agent, task_type, platform, content_type, output, metadata, status, created_at, scheduled_for')
-      .in('status', ['pending', 'approved', 'rejected', 'scheduled', 'posted', 'failed'])
-      .order('created_at', { ascending: false }),
-  ])
-
-  if (campRes.error) { showToast('Error: ' + campRes.error.message, 'error'); return }
-
-  const contentByCampaign = {}
-  for (const row of contentRes.data ?? []) {
-    if (!contentByCampaign[row.campaign_id]) contentByCampaign[row.campaign_id] = []
-    contentByCampaign[row.campaign_id].push(row)
+  try {
+    const res  = await fetch('/api/agents/campaigns')
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? 'Failed to load campaigns')
+    allCampaigns = data.campaigns ?? []
+    render()
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error')
   }
-
-  allCampaigns = (campRes.data ?? []).map(c => ({
-    ...c,
-    items: contentByCampaign[c.id] ?? [],
-  }))
-
-  render()
 }
 
 // ── Render ────────────────────────────────────────────────────
