@@ -11,28 +11,33 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
 
   try {
-    const { data, error } = await supabase
+    const { data: items, error } = await supabase
       .from('content_log')
-      .select(`
-        id,
-        product,
-        agent,
-        task_type,
-        platform,
-        content_type,
-        output,
-        metadata,
-        status,
-        created_at,
-        campaign_log ( id, name )
-      `)
+      .select('id, campaign_id, product, agent, task_type, platform, content_type, output, metadata, status, created_at')
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(50)
 
     if (error) throw error
 
-    res.json({ ok: true, items: data ?? [] })
+    if (!items?.length) return res.json({ ok: true, items: [] })
+
+    // Fetch campaign names separately
+    const campaignIds = [...new Set(items.map(i => i.campaign_id).filter(Boolean))]
+    const { data: campaigns } = await supabase
+      .from('campaign_log')
+      .select('id, name')
+      .in('id', campaignIds)
+
+    const campaignMap = {}
+    for (const c of campaigns ?? []) campaignMap[c.id] = c
+
+    const result = items.map(item => ({
+      ...item,
+      campaign_log: campaignMap[item.campaign_id] ?? null,
+    }))
+
+    res.json({ ok: true, items: result })
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
   }
