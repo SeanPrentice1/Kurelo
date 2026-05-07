@@ -7,6 +7,8 @@ const AGENT_LABELS = {
   analytics: 'Analytics Agent',
 }
 
+const VISUAL_PLATFORMS = new Set(['instagram', 'tiktok', 'linkedin', 'twitter', 'meta_ads', 'google_ads', 'stories'])
+
 const AGENT_EMOJIS = {
   content:   '✍️',
   ads:       '📣',
@@ -21,7 +23,13 @@ function taskLabel(type) {
 /** Blocks for the initial campaign plan post */
 export function planBlocks({ campaign_name, product, summary, estimated_timeline, tasks }) {
   const taskLines = tasks
-    .map((t, i) => `${i + 1}. *${(AGENT_LABELS[t.agent] ?? t.agent).toUpperCase()}* — ${t.description}`)
+    .map((t, i) => {
+      const label = (AGENT_LABELS[t.agent] ?? t.agent).toUpperCase()
+      const visualNote = t.agent === 'content' && VISUAL_PLATFORMS.has(t.platform?.toLowerCase())
+        ? ' 🎨 _+ image generation_'
+        : ''
+      return `${i + 1}. *${label}* — ${t.description}${visualNote}`
+    })
     .join('\n')
 
   const productBadge = product === 'crevaxo' ? '🟠 Crevaxo' : '🟣 Rostura'
