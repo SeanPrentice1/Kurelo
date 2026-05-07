@@ -1,9 +1,3 @@
-// ── Supabase (anon key — same project as content-planner) ─────
-const SUPABASE_URL      = 'https://ovmlohgptdiryvlwztxz.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92bWxvaGdwdGRpcnl2bHd6dHh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5ODQwNjYsImV4cCI6MjA5MTU2MDA2Nn0.oItHZhkUTmCPP9CO1-RacGyl8tD14pxdv71nxz6N3F4'
-const { createClient } = window.supabase
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-
 // ── State ─────────────────────────────────────────────────────
 let allItems = []
 const filters = { product: 'all', agent: 'all' }
@@ -24,16 +18,15 @@ const PLATFORM_LABELS = {
 
 // ── Fetch ─────────────────────────────────────────────────────
 async function fetchInbox() {
-  const { data, error } = await sb
-    .from('content_log')
-    .select('id, product, agent, task_type, platform, content_type, output, metadata, status, created_at, campaign_log(id, name)')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false })
-    .limit(50)
-
-  if (error) { showToast('Error loading inbox: ' + error.message, 'error'); return }
-  allItems = data ?? []
-  render()
+  try {
+    const res  = await fetch('/api/agents/inbox')
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? 'Failed to load inbox')
+    allItems = data.items ?? []
+    render()
+  } catch (err) {
+    showToast('Error loading inbox: ' + err.message, 'error')
+  }
 }
 
 // ── Render ────────────────────────────────────────────────────
