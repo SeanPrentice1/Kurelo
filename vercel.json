@@ -1,6 +1,8 @@
 {
   "outputDirectory": ".",
   "rewrites": [
-    { "source": "/dashboard", "destination": "/dashboard/index.html" }
+    { "source": "/dashboard",          "destination": "/dashboard/index.html" },
+    { "source": "/dashboard/inbox",    "destination": "/dashboard/inbox.html" },
+    { "source": "/dashboard/campaigns","destination": "/dashboard/campaign.html" }
   ]
 }
