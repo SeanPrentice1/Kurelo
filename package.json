@@ -1,0 +1,7 @@
+{
+  "name": "kurelo",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  }
+}
