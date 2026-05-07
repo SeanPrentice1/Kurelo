@@ -4,7 +4,7 @@ import { CONTENT_SYSTEM_PROMPT } from '../prompts/content.js'
 import { approvalBlocks } from '../tools/slack.js'
 import supabase from '../tools/supabase.js'
 
-export async function runContentAgent({ task, campaignId, campaignName, channelId, slackClient, dependencyContext = [] }) {
+export async function runContentAgent({ task, campaignId, campaignName, channelId, slackClient, dependencyContext = [], skipSlack = false }) {
   const { product, platform, description, params = {} } = task
   console.log(`[content-agent] Running: ${task.type} / ${platform} for ${product}`)
 
@@ -51,24 +51,27 @@ export async function runContentAgent({ task, campaignId, campaignName, channelI
 
   if (error) throw new Error(`content_log insert failed: ${error.message}`)
 
-  const msg = await slackClient.chat.postMessage({
-    channel: channelId,
-    text:    `Content ready for approval: ${task.type}`,
-    blocks:  approvalBlocks({
-      contentId:    item.id,
-      campaignName,
-      agent:        'content',
-      taskType:     task.type,
-      platform,
-      output:       item.output,
-      metadata:     item.metadata,
-    }),
-  })
+  // skipSlack = true when the designer agent will handle the Slack post
+  if (!skipSlack) {
+    const msg = await slackClient.chat.postMessage({
+      channel: channelId,
+      text:    `Content ready for approval: ${task.type}`,
+      blocks:  approvalBlocks({
+        contentId:    item.id,
+        campaignName,
+        agent:        'content',
+        taskType:     task.type,
+        platform,
+        output:       item.output,
+        metadata:     item.metadata,
+      }),
+    })
 
-  await supabase
-    .from('content_log')
-    .update({ slack_ts: msg.ts })
-    .eq('id', item.id)
+    await supabase
+      .from('content_log')
+      .update({ slack_ts: msg.ts })
+      .eq('id', item.id)
+  }
 
   console.log(`[content-agent] Done: ${item.id}`)
   return item
