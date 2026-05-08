@@ -22,15 +22,16 @@ export default async function handler(req, res) {
 
     if (!items?.length) return res.json({ ok: true, items: [] })
 
-    // Fetch campaign names separately
+    // Fetch campaign names separately — guard against empty array which PostgREST rejects
     const campaignIds = [...new Set(items.map(i => i.campaign_id).filter(Boolean))]
-    const { data: campaigns } = await supabase
-      .from('campaign_log')
-      .select('id, name')
-      .in('id', campaignIds)
-
     const campaignMap = {}
-    for (const c of campaigns ?? []) campaignMap[c.id] = c
+    if (campaignIds.length > 0) {
+      const { data: campaigns } = await supabase
+        .from('campaign_log')
+        .select('id, name')
+        .in('id', campaignIds)
+      for (const c of campaigns ?? []) campaignMap[c.id] = c
+    }
 
     const result = items.map(item => ({
       ...item,
