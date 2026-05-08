@@ -73,13 +73,14 @@ async function generatePlan({ brief, product, memoryText }) {
   })
 
   const raw = response.content[0].text.trim()
-  try {
-    return JSON.parse(raw)
-  } catch {
-    const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/) ?? raw.match(/(\{[\s\S]*\})/)
-    if (match) return JSON.parse(match[1] ?? match[0])
-    throw new Error(`Marketing Director returned unparseable plan: ${raw.substring(0, 200)}`)
+  try { return JSON.parse(raw) } catch { /* fall through to extraction */ }
+
+  const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/) ?? raw.match(/(\{[\s\S]*\})/)
+  if (match) {
+    try { return JSON.parse(match[1] ?? match[0]) } catch { /* fall through */ }
   }
+
+  throw new Error(`Marketing Director returned unparseable plan: ${raw.substring(0, 400)}`)
 }
 
 async function executeTasks({ tasks, product, campaignId, campaignName, channelId, slackClient }) {
