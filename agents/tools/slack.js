@@ -76,15 +76,9 @@ export function planBlocks({ campaign_name, product, summary, estimated_timeline
         { type: 'mrkdwn', text: `*Timeline:*\n${estimated_timeline ?? '-'}` },
       ],
     },
-    {
-      type: 'section',
-      text: { type: 'mrkdwn', text: `*Brief:*\n${summary}` },
-    },
+    ...textBlocks(`*Brief:*\n${summary}`),
     { type: 'divider' },
-    {
-      type: 'section',
-      text: { type: 'mrkdwn', text: `*Task plan:*\n${taskLines}` },
-    },
+    ...textBlocks(`*Task plan:*\n${taskLines}`),
     {
       type: 'context',
       elements: [{ type: 'mrkdwn', text: '⚡ Marketing Director executing... outputs will appear below for approval.' }],
@@ -136,7 +130,7 @@ export function approvalBlocks({ contentId, campaignName, agent, taskType, platf
   }
 
   if (metaParts.length) {
-    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: metaParts.join('\n') } })
+    blocks.push(...textBlocks(metaParts.join('\n')))
   }
 
   blocks.push({ type: 'divider' })
@@ -181,7 +175,7 @@ export function imageApprovalBlocks({ contentId, campaignName, agent, taskType, 
   if (referenceScreenshot)        metaParts.push(`*Reference used:* \`${referenceScreenshot}\``)
 
   if (metaParts.length) {
-    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: metaParts.join('\n') } })
+    blocks.push(...textBlocks(metaParts.join('\n')))
   }
 
   blocks.push({ type: 'divider' })
@@ -206,33 +200,21 @@ export function campaignSummaryBlocks({ campaignName, product, summary, research
         { type: 'mrkdwn', text: `*Outputs:*\n${pendingCount} post${pendingCount === 1 ? '' : 's'} pending approval` },
       ],
     },
-    {
-      type: 'section',
-      text: { type: 'mrkdwn', text: `*Summary:*\n${summary}` },
-    },
+    ...textBlocks(`*Summary:*\n${summary}`),
   ]
 
   if (researchSummary) {
     blocks.push({ type: 'divider' })
-    blocks.push({
-      type: 'section',
-      text: { type: 'mrkdwn', text: `🔍 *Research brief:*\n${researchSummary}` },
-    })
+    blocks.push(...textBlocks(`🔍 *Research brief:*\n${researchSummary}`))
   }
 
   if (analyticsSummary) {
-    blocks.push({
-      type: 'section',
-      text: { type: 'mrkdwn', text: `📊 *Analytics brief:*\n${analyticsSummary}` },
-    })
+    blocks.push(...textBlocks(`📊 *Analytics brief:*\n${analyticsSummary}`))
   }
 
   if (flags.length) {
     blocks.push({ type: 'divider' })
-    blocks.push({
-      type: 'section',
-      text: { type: 'mrkdwn', text: `⚠️ *Flags:*\n${flags.map(f => `- ${f}`).join('\n')}` },
-    })
+    blocks.push(...textBlocks(`⚠️ *Flags:*\n${flags.map(f => `- ${f}`).join('\n')}`))
   }
 
   blocks.push({
