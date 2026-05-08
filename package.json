@@ -1,6 +1,7 @@
 {
   "name": "kurelo",
   "private": true,
+  "type": "module",
   "engines": {
     "node": ">=22"
   },
