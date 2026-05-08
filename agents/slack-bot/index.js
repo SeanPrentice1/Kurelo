@@ -1,6 +1,6 @@
 import { App, ExpressReceiver } from '@slack/bolt'
 import { runOrchestrator } from '../orchestrator/index.js'
-import { scheduleApprovedContent } from '../scheduler-agent/index.js'
+import { scheduleApprovedContent } from '../marketing/scheduler-agent/index.js'
 import { logDecision } from '../tools/memory.js'
 import { resolvedBlocks } from '../tools/slack.js'
 import supabase from '../tools/supabase.js'

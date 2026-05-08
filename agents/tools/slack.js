@@ -1,13 +1,11 @@
 // Slack Block Kit helpers
 
 const AGENT_LABELS = {
-  content:   'Content Agent',
-  ads:       'Ads Agent',
-  research:  'Research Agent',
-  analytics: 'Analytics Agent',
+  content:   'Content',
+  ads:       'Ads',
+  research:  'Research',
+  analytics: 'Analytics',
 }
-
-const VISUAL_PLATFORMS = new Set(['instagram', 'tiktok', 'linkedin', 'twitter', 'meta_ads', 'google_ads', 'stories'])
 
 const AGENT_EMOJIS = {
   content:   '✍️',
@@ -16,171 +14,230 @@ const AGENT_EMOJIS = {
   analytics: '📊',
 }
 
+const PLATFORM_LABELS = {
+  instagram:  'Instagram',
+  tiktok:     'TikTok',
+  linkedin:   'LinkedIn',
+  reddit:     'Reddit',
+  twitter:    'Twitter/X',
+  meta_ads:   'Meta Ads',
+  google_ads: 'Google Ads',
+  stories:    'Stories',
+}
+
+const VISUAL_PLATFORMS = new Set(['instagram', 'tiktok', 'linkedin', 'twitter', 'meta_ads', 'google_ads', 'stories'])
+
 function taskLabel(type) {
-  return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  return (type ?? '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function platformLabel(p) {
+  return PLATFORM_LABELS[p?.toLowerCase()] ?? p ?? '-'
+}
+
+// Split text that exceeds Slack's 3000-char block limit into multiple section blocks
+function textBlocks(text, maxLen = 2500) {
+  const blocks = []
+  let remaining = text
+  while (remaining.length > 0) {
+    const chunk = remaining.substring(0, maxLen)
+    remaining = remaining.substring(maxLen)
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: chunk } })
+    if (remaining.length > 0) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_...continued_' } })
+    }
+  }
+  return blocks
 }
 
 /** Blocks for the initial campaign plan post */
 export function planBlocks({ campaign_name, product, summary, estimated_timeline, tasks }) {
+  const productBadge = product === 'crevaxo' ? '🟠 Crevaxo' : '🟣 Rostura'
+
   const taskLines = tasks
     .map((t, i) => {
-      const label = (AGENT_LABELS[t.agent] ?? t.agent).toUpperCase()
-      const visualNote = t.agent === 'content' && VISUAL_PLATFORMS.has(t.platform?.toLowerCase())
-        ? ' 🎨 _+ image generation_'
-        : ''
-      return `${i + 1}. *${label}* — ${t.description}${visualNote}`
+      const label = AGENT_LABELS[t.agent] ?? t.agent
+      const plat  = t.platform ? ` - ${platformLabel(t.platform)}` : ''
+      const imgNote = t.agent === 'content' && VISUAL_PLATFORMS.has(t.platform?.toLowerCase())
+        ? ' _(+ image generation)_' : ''
+      return `${i + 1}. *${label}*${plat}${imgNote} - ${t.description}`
     })
     .join('\n')
-
-  const productBadge = product === 'crevaxo' ? '🟠 Crevaxo' : '🟣 Rostura'
 
   return [
     {
       type: 'header',
-      text: { type: 'plain_text', text: `📋 New Campaign: ${campaign_name}`, emoji: true },
+      text: { type: 'plain_text', text: `📋 ${campaign_name}`, emoji: true },
     },
     {
       type: 'section',
       fields: [
         { type: 'mrkdwn', text: `*Product:*\n${productBadge}` },
-        { type: 'mrkdwn', text: `*Timeline:*\n${estimated_timeline ?? '—'}` },
-        { type: 'mrkdwn', text: `*Tasks:*\n${tasks.length} agent task${tasks.length === 1 ? '' : 's'}` },
+        { type: 'mrkdwn', text: `*Timeline:*\n${estimated_timeline ?? '-'}` },
+      ],
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Brief:*\n${summary}` },
+    },
+    { type: 'divider' },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Task plan:*\n${taskLines}` },
+    },
+    {
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '⚡ Marketing Director executing... outputs will appear below for approval.' }],
+    },
+  ]
+}
+
+/** Approval blocks for a text-only content item (copy + metadata, no image) */
+export function approvalBlocks({ contentId, campaignName, agent, taskType, platform, output, metadata }) {
+  const emoji = AGENT_EMOJIS[agent] ?? '📄'
+  const label = AGENT_LABELS[agent] ?? agent
+
+  const blocks = [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: `${emoji} ${label}: ${taskLabel(taskType)}`, emoji: true },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Campaign:*\n${campaignName}` },
+        { type: 'mrkdwn', text: `*Platform:*\n${platformLabel(platform)}` },
+      ],
+    },
+  ]
+
+  if (metadata?.hook) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Hook:*\n${metadata.hook}` },
+    })
+  }
+
+  if (metadata?.headline) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Headline:*\n${metadata.headline}` },
+    })
+  }
+
+  blocks.push(...textBlocks(`*Copy:*\n${output}`))
+
+  const metaParts = []
+  if (metadata?.hashtags?.length) metaParts.push(`*Hashtags:* ${metadata.hashtags.map(h => `#${h}`).join(' ')}`)
+  if (metadata?.cta)              metaParts.push(`*CTA:* ${metadata.cta}`)
+  if (metadata?.image_prompt)     metaParts.push(`*Image direction:* ${metadata.image_prompt}`)
+  if (metadata?.variants?.length) {
+    metaParts.push(`*Variants:*\n${metadata.variants.map((v, i) => `_Option ${i + 2}:_ ${v.headline} - ${v.primary_text}`).join('\n')}`)
+  }
+
+  if (metaParts.length) {
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: metaParts.join('\n') } })
+  }
+
+  blocks.push({ type: 'divider' })
+  blocks.push(actionButtons(contentId))
+
+  return blocks
+}
+
+/** Approval blocks for a combined image + copy package */
+export function imageApprovalBlocks({ contentId, campaignName, agent, taskType, platform, output, metadata, imageUrl, referenceScreenshot }) {
+  const emoji = AGENT_EMOJIS[agent] ?? '📄'
+  const label = AGENT_LABELS[agent] ?? agent
+
+  const blocks = [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: `${emoji} ${label}: ${taskLabel(taskType)}`, emoji: true },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Campaign:*\n${campaignName}` },
+        { type: 'mrkdwn', text: `*Platform:*\n${platformLabel(platform)}` },
+      ],
+    },
+    {
+      type: 'image',
+      image_url: imageUrl,
+      alt_text:  `Generated visual for ${platformLabel(platform)} - ${campaignName}`,
+    },
+  ]
+
+  if (metadata?.hook) {
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*Hook:*\n${metadata.hook}` } })
+  }
+
+  blocks.push(...textBlocks(`*Copy:*\n${output}`))
+
+  const metaParts = []
+  if (metadata?.hashtags?.length) metaParts.push(`*Hashtags:* ${metadata.hashtags.map(h => `#${h}`).join(' ')}`)
+  if (metadata?.cta)              metaParts.push(`*CTA:* ${metadata.cta}`)
+  if (referenceScreenshot)        metaParts.push(`*Reference used:* \`${referenceScreenshot}\``)
+
+  if (metaParts.length) {
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: metaParts.join('\n') } })
+  }
+
+  blocks.push({ type: 'divider' })
+  blocks.push(actionButtons(contentId))
+
+  return blocks
+}
+
+/** Campaign summary posted by orchestrator after Marketing Director compiles outputs */
+export function campaignSummaryBlocks({ campaignName, product, summary, researchSummary, analyticsSummary, pendingCount, flags = [] }) {
+  const productBadge = product === 'crevaxo' ? '🟠 Crevaxo' : '🟣 Rostura'
+
+  const blocks = [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: `✅ Campaign ready: ${campaignName}`, emoji: true },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Product:*\n${productBadge}` },
+        { type: 'mrkdwn', text: `*Outputs:*\n${pendingCount} post${pendingCount === 1 ? '' : 's'} pending approval` },
       ],
     },
     {
       type: 'section',
       text: { type: 'mrkdwn', text: `*Summary:*\n${summary}` },
     },
-    { type: 'divider' },
-    {
-      type: 'section',
-      text: { type: 'mrkdwn', text: `*Task Breakdown:*\n${taskLines}` },
-    },
-    {
-      type: 'context',
-      elements: [{ type: 'mrkdwn', text: '⚡ Dispatching agents… outputs will appear below for approval.' }],
-    },
-  ]
-}
-
-/** Blocks for an individual content approval request */
-export function approvalBlocks({ contentId, campaignName, agent, taskType, platform, output, metadata }) {
-  const emoji = AGENT_EMOJIS[agent] ?? '📄'
-  const label = AGENT_LABELS[agent] ?? agent
-
-  // Build metadata summary lines
-  const metaEntries = []
-  if (metadata?.hashtags?.length) metaEntries.push(`*Hashtags:* ${metadata.hashtags.map(h => `#${h}`).join(' ')}`)
-  if (metadata?.hook)             metaEntries.push(`*Hook:* ${metadata.hook}`)
-  if (metadata?.cta)              metaEntries.push(`*CTA:* ${metadata.cta}`)
-  if (metadata?.headline)         metaEntries.push(`*Headline:* ${metadata.headline}`)
-  if (metadata?.image_prompt)     metaEntries.push(`*Image prompt:* ${metadata.image_prompt}`)
-
-  const blocks = [
-    {
-      type: 'header',
-      text: { type: 'plain_text', text: `${emoji} ${label}: ${taskLabel(taskType)}`, emoji: true },
-    },
-    {
-      type: 'section',
-      fields: [
-        { type: 'mrkdwn', text: `*Campaign:*\n${campaignName}` },
-        { type: 'mrkdwn', text: `*Platform:*\n${platform ?? '—'}` },
-      ],
-    },
-    {
-      type: 'section',
-      text: { type: 'mrkdwn', text: `\`\`\`${output.length > 2800 ? output.substring(0, 2800) + '…' : output}\`\`\`` },
-    },
   ]
 
-  if (metaEntries.length) {
+  if (researchSummary) {
+    blocks.push({ type: 'divider' })
     blocks.push({
       type: 'section',
-      text: { type: 'mrkdwn', text: metaEntries.join('\n') },
+      text: { type: 'mrkdwn', text: `🔍 *Research brief:*\n${researchSummary}` },
     })
   }
 
-  blocks.push({ type: 'divider' })
-  blocks.push({
-    type: 'actions',
-    elements: [
-      {
-        type: 'button',
-        text: { type: 'plain_text', text: '✅ Approve', emoji: true },
-        style: 'primary',
-        action_id: 'approve_content',
-        value: contentId,
-      },
-      {
-        type: 'button',
-        text: { type: 'plain_text', text: '❌ Reject', emoji: true },
-        style: 'danger',
-        action_id: 'reject_content',
-        value: contentId,
-      },
-    ],
-  })
-
-  return blocks
-}
-
-/** Approval blocks for a combined image + copy post package */
-export function imageApprovalBlocks({ contentId, campaignName, agent, taskType, platform, output, metadata, imageUrl }) {
-  const emoji = AGENT_EMOJIS[agent] ?? '📄'
-  const label = AGENT_LABELS[agent] ?? agent
-
-  const metaEntries = []
-  if (metadata?.hashtags?.length) metaEntries.push(`*Hashtags:* ${metadata.hashtags.map(h => `#${h}`).join(' ')}`)
-  if (metadata?.hook)             metaEntries.push(`*Hook:* ${metadata.hook}`)
-  if (metadata?.cta)              metaEntries.push(`*CTA:* ${metadata.cta}`)
-
-  const blocks = [
-    {
-      type: 'header',
-      text: { type: 'plain_text', text: `${emoji} ${label}: ${taskLabel(taskType)}`, emoji: true },
-    },
-    {
+  if (analyticsSummary) {
+    blocks.push({
       type: 'section',
-      fields: [
-        { type: 'mrkdwn', text: `*Campaign:*\n${campaignName}` },
-        { type: 'mrkdwn', text: `*Platform:*\n${platform ?? '—'}` },
-      ],
-    },
-    {
-      type: 'image',
-      image_url: imageUrl,
-      alt_text:  `Generated visual for ${platform} — ${campaignName}`,
-    },
-    {
-      type: 'section',
-      text: { type: 'mrkdwn', text: `\`\`\`${output.length > 2800 ? output.substring(0, 2800) + '…' : output}\`\`\`` },
-    },
-  ]
-
-  if (metaEntries.length) {
-    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: metaEntries.join('\n') } })
+      text: { type: 'mrkdwn', text: `📊 *Analytics brief:*\n${analyticsSummary}` },
+    })
   }
 
-  blocks.push({ type: 'divider' })
+  if (flags.length) {
+    blocks.push({ type: 'divider' })
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `⚠️ *Flags:*\n${flags.map(f => `- ${f}`).join('\n')}` },
+    })
+  }
+
   blocks.push({
-    type: 'actions',
-    elements: [
-      {
-        type: 'button',
-        text: { type: 'plain_text', text: '✅ Approve', emoji: true },
-        style: 'primary',
-        action_id: 'approve_content',
-        value: contentId,
-      },
-      {
-        type: 'button',
-        text: { type: 'plain_text', text: '❌ Reject', emoji: true },
-        style: 'danger',
-        action_id: 'reject_content',
-        value: contentId,
-      },
-    ],
+    type: 'context',
+    elements: [{ type: 'mrkdwn', text: '👇 Approval cards below - one per output.' }],
   })
 
   return blocks
@@ -190,13 +247,38 @@ export function imageApprovalBlocks({ contentId, campaignName, agent, taskType, 
 export function resolvedBlocks({ decision, decidedBy, output, agent, taskType }) {
   const emoji = decision === 'approved' ? '✅' : '❌'
   const label = decision === 'approved' ? 'Approved' : 'Rejected'
+  const agentEmoji = AGENT_EMOJIS[agent] ?? ''
+  const preview = output.substring(0, 280) + (output.length > 280 ? '...' : '')
+
   return [
     {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `${emoji} *${label}* by <@${decidedBy}> — ${AGENT_EMOJIS[agent] ?? ''} ${taskLabel(taskType)}\n\`\`\`${output.substring(0, 300)}${output.length > 300 ? '…' : ''}\`\`\``,
+        text: `${emoji} *${label}* by <@${decidedBy}> - ${agentEmoji} ${taskLabel(taskType)}\n${preview}`,
       },
     },
   ]
+}
+
+function actionButtons(contentId) {
+  return {
+    type: 'actions',
+    elements: [
+      {
+        type:      'button',
+        text:      { type: 'plain_text', text: '✅ Approve', emoji: true },
+        style:     'primary',
+        action_id: 'approve_content',
+        value:     contentId,
+      },
+      {
+        type:      'button',
+        text:      { type: 'plain_text', text: '❌ Reject', emoji: true },
+        style:     'danger',
+        action_id: 'reject_content',
+        value:     contentId,
+      },
+    ],
+  }
 }
