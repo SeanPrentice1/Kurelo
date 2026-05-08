@@ -50,7 +50,7 @@ function render() {
   document.getElementById('campaign-updated').textContent = `Updated ${timeAgo(new Date().toISOString())}`
 
   // Summary stats across all (unfiltered) campaigns
-  const allItems    = allCampaigns.flatMap(c => c.items)
+  const allItems    = allCampaigns.flatMap(c => c.content?.items ?? [])
   document.getElementById('stat-total').textContent     = allCampaigns.length
   document.getElementById('stat-pending').textContent   = allItems.filter(i => i.status === 'pending').length
   document.getElementById('stat-scheduled').textContent = allItems.filter(i => i.status === 'scheduled').length
@@ -94,18 +94,20 @@ function campaignCardHTML(c) {
   const budget      = c.budget_cents != null ? `$${(c.budget_cents / 100).toFixed(2)}` : '—'
   const age         = timeAgo(c.created_at)
 
+  const items = c.content?.items ?? []
+
   const counts = {
-    pending:   c.items.filter(i => i.status === 'pending').length,
-    approved:  c.items.filter(i => i.status === 'approved').length,
-    scheduled: c.items.filter(i => i.status === 'scheduled').length,
-    posted:    c.items.filter(i => i.status === 'posted').length,
-    rejected:  c.items.filter(i => i.status === 'rejected').length,
+    pending:   items.filter(i => i.status === 'pending').length,
+    approved:  items.filter(i => i.status === 'approved').length,
+    scheduled: items.filter(i => i.status === 'scheduled').length,
+    posted:    items.filter(i => i.status === 'posted').length,
+    rejected:  items.filter(i => i.status === 'rejected').length,
   }
 
-  const pendingItems    = c.items.filter(i => i.status === 'pending')
-  const queuedItems     = c.items.filter(i => i.status === 'scheduled')
-  const postedItems     = c.items.filter(i => i.status === 'posted')
-  const completedItems  = c.items.filter(i => ['approved', 'rejected'].includes(i.status))
+  const pendingItems    = items.filter(i => i.status === 'pending')
+  const queuedItems     = items.filter(i => i.status === 'scheduled')
+  const postedItems     = items.filter(i => i.status === 'posted')
+  const completedItems  = items.filter(i => ['approved', 'rejected'].includes(i.status))
 
   return `
     <div class="camp-card">
