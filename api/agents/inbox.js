@@ -10,6 +10,10 @@ export default async function handler(req, res) {
 
   res.setHeader('Cache-Control', 'no-store')
 
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return res.status(500).json({ ok: false, error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env var' })
+  }
+
   try {
     const { data: items, error } = await supabase
       .from('content_log')
