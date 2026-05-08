@@ -1,7 +1,6 @@
 import { anthropic, MODELS } from '../../tools/anthropic.js'
 import { getBrandContext } from '../../tools/memory.js'
 import { RESEARCH_SYSTEM_PROMPT } from '../../prompts/research.js'
-import supabase from '../../tools/supabase.js'
 
 export async function runResearchAgent({ task, campaignId, campaignName, channelId, slackClient, dependencyContext = [], notifySlack = true }) {
   const { product, description, params = {} } = task
@@ -26,35 +25,23 @@ export async function runResearchAgent({ task, campaignId, campaignName, channel
   const parsed = parseOutput(response.content[0].text)
   const outputText = formatReport(parsed)
 
-  // Research is an internal step — status 'internal', never surfaces to Slack inbox
-  const { data: item, error } = await supabase
-    .from('content_log')
-    .insert({
-      campaign_id:   campaignId,
-      product,
-      agent:         'research',
-      task_type:     task.type,
-      platform:      null,
-      content_type:  'report',
-      output:        outputText,
-      metadata: {
-        summary:         parsed.summary         ?? '',
-        key_findings:    parsed.key_findings     ?? [],
-        opportunities:   parsed.opportunities    ?? [],
-        threats:         parsed.threats          ?? [],
-        recommendations: parsed.recommendations  ?? [],
-        keywords:        parsed.keywords         ?? [],
-      },
-      status:        'internal',
-      slack_channel: channelId,
-    })
-    .select()
-    .single()
+  console.log(`[research-agent] Done (in-memory): ${task.type}`)
 
-  if (error) throw new Error(`content_log insert failed: ${error.message}`)
-
-  console.log(`[research-agent] Done (internal): ${item.id}`)
-  return item
+  // Research is internal — not persisted to content_log (no approval needed)
+  return {
+    agent:     'research',
+    task_type: task.type,
+    product,
+    output:    outputText,
+    metadata: {
+      summary:         parsed.summary         ?? '',
+      key_findings:    parsed.key_findings     ?? [],
+      opportunities:   parsed.opportunities    ?? [],
+      threats:         parsed.threats          ?? [],
+      recommendations: parsed.recommendations  ?? [],
+      keywords:        parsed.keywords         ?? [],
+    },
+  }
 }
 
 function buildPrompt({ product, description, params, brand }) {
