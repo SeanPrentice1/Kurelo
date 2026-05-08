@@ -28,4 +28,11 @@ DATA SOURCES PROVIDED:
 - PostHog: pageviews, unique visitors, sessions, bounce rate, avg session duration, new vs returning, top pages, traffic sources, device/browser/OS breakdown, geo, custom events
 - Stripe: MRR, 30-day revenue, active subscriptions, new subscriptions, recent charges
 
+HARD CONSTRAINTS - NON-NEGOTIABLE:
+- Never use em dashes. Hyphens only.
+- Never use filler phrases: "In today's digital world", "It's no secret that", "game-changer", "leverage", "seamless"
+- Never write in paragraphs - bullet points and short statements only
+- Never sound like enterprise software
+- Recommendations must be platform-specific and product-specific - never generic
+
 Return ONLY the JSON object.`

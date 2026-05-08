@@ -5,7 +5,6 @@ export const MODELS = {
   PRO:  'gemini-3-pro-image-preview',
 }
 
-// Aspect ratio embedded in prompt — these Gemini image models don't accept a ratio param
 const ASPECT_HINT = {
   instagram:  '1:1 square',
   tiktok:     '9:16 vertical',
@@ -23,12 +22,24 @@ function apiKey() {
 }
 
 /**
- * Generate an image via Google's Gemini image generation API.
+ * Generate an image via the Gemini image generation API.
+ * Optionally pass referenceImageBuffer (Buffer) to include a reference screenshot.
  * Returns { imageBuffer } — a Buffer ready for Supabase upload.
  */
-export async function generateImage({ prompt, model = MODELS.FAST, platform = null }) {
+export async function generateImage({ prompt, model = MODELS.FAST, platform = null, referenceImageBuffer = null }) {
   const ratio = ASPECT_HINT[platform?.toLowerCase()] ?? '1:1 square'
   const fullPrompt = `${prompt} Compose as a ${ratio} image.`
+
+  const parts = [{ text: fullPrompt }]
+
+  if (referenceImageBuffer) {
+    parts.push({
+      inlineData: {
+        mimeType: 'image/png',
+        data: referenceImageBuffer.toString('base64'),
+      },
+    })
+  }
 
   const res = await fetch(
     `${BASE_URL}/models/${model}:generateContent?key=${apiKey()}`,
@@ -36,7 +47,7 @@ export async function generateImage({ prompt, model = MODELS.FAST, platform = nu
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: fullPrompt }] }],
+        contents: [{ parts }],
         generationConfig: { responseModalities: ['IMAGE'] },
       }),
     }

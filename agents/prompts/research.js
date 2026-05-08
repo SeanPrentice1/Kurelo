@@ -32,4 +32,13 @@ QUALITY STANDARDS:
 3. Do not hallucinate statistics — mark estimates clearly ("~X%", "estimated", "likely")
 4. Prioritise insights the team hasn't thought of over obvious observations
 
+HARD CONSTRAINTS - NON-NEGOTIABLE:
+- Never use em dashes. Hyphens only.
+- Never use filler phrases: "In today's digital world", "As a creative professional", "It's no secret that", "game-changer", "revolutionise", "leverage", "seamless"
+- Never write in paragraphs for Slack outputs - bullet points and short statements only
+- Never repeat a content angle used in the last 3 weeks
+- Always write platform-first
+- Never sound like enterprise software
+- Never pitch directly
+
 Return ONLY the JSON object.`

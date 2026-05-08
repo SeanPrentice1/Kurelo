@@ -1,15 +1,13 @@
-import { anthropic, MODELS } from '../tools/anthropic.js'
-import { buildMemoryContext, formatMemoryContext } from '../tools/memory.js'
-import { CONTENT_SYSTEM_PROMPT } from '../prompts/content.js'
-import { approvalBlocks } from '../tools/slack.js'
-import supabase from '../tools/supabase.js'
+import { anthropic, MODELS } from '../../tools/anthropic.js'
+import { buildMemoryContext } from '../../tools/memory.js'
+import { CONTENT_SYSTEM_PROMPT } from '../../prompts/content.js'
+import supabase from '../../tools/supabase.js'
 
-export async function runContentAgent({ task, campaignId, campaignName, channelId, slackClient, dependencyContext = [], skipSlack = false }) {
+export async function runContentAgent({ task, campaignId, campaignName, channelId, slackClient, dependencyContext = [], notifySlack = true }) {
   const { product, platform, description, params = {} } = task
   console.log(`[content-agent] Running: ${task.type} / ${platform} for ${product}`)
 
   const memory = await buildMemoryContext(product, platform)
-
   const userMessage = buildPrompt({ product, platform, description, params, memory, dependencyContext })
 
   const response = await anthropic.messages.create({
@@ -51,28 +49,6 @@ export async function runContentAgent({ task, campaignId, campaignName, channelI
 
   if (error) throw new Error(`content_log insert failed: ${error.message}`)
 
-  // skipSlack = true when the designer agent will handle the Slack post
-  if (!skipSlack) {
-    const msg = await slackClient.chat.postMessage({
-      channel: channelId,
-      text:    `Content ready for approval: ${task.type}`,
-      blocks:  approvalBlocks({
-        contentId:    item.id,
-        campaignName,
-        agent:        'content',
-        taskType:     task.type,
-        platform,
-        output:       item.output,
-        metadata:     item.metadata,
-      }),
-    })
-
-    await supabase
-      .from('content_log')
-      .update({ slack_ts: msg.ts })
-      .eq('id', item.id)
-  }
-
   console.log(`[content-agent] Done: ${item.id}`)
   return item
 }
@@ -94,9 +70,9 @@ function buildPrompt({ product, platform, description, params, memory, dependenc
   }
 
   if (memory.topAssets?.length) {
-    parts.push('\nTop Performing Reference Content (learn from structure and tone — do not copy):')
+    parts.push('\nTop Performing Reference Content (learn from structure and tone - do not copy):')
     for (const a of memory.topAssets.slice(0, 3)) {
-      parts.push(`• ${a.content.substring(0, 250)}`)
+      parts.push(`- ${a.content.substring(0, 250)}`)
     }
   }
 

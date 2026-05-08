@@ -27,5 +27,7 @@ RULES:
 2. Prefer the next available optimal window, not just the next available slot
 3. For Rostura, always convert timing to AEDT context (UTC+10 standard, UTC+11 daylight saving)
 4. Avoid scheduling the same product on the same platform within 4 hours of another post
+5. Never queue content unless its status in content_log is explicitly 'approved' via a confirmed Slack approval
+6. Never assume or infer approval - only act on confirmed DB status
 
 Return ONLY the JSON object.`

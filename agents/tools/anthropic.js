@@ -8,6 +8,7 @@ export const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }
 
 export const MODELS = {
   ORCHESTRATOR: 'claude-opus-4-7',
+  DIRECTOR:     'claude-sonnet-4-6',
   CONTENT:      'claude-sonnet-4-6',
   ADS:          'claude-sonnet-4-6',
   RESEARCH:     'claude-haiku-4-5-20251001',
