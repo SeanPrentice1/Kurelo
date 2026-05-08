@@ -1,6 +1,5 @@
 import { anthropic, MODELS } from '../../tools/anthropic.js'
 import { ANALYTICS_SYSTEM_PROMPT } from '../../prompts/analytics.js'
-import supabase from '../../tools/supabase.js'
 
 export async function runAnalyticsAgent({ task, campaignId, campaignName, channelId, slackClient, notifySlack = true }) {
   const { product, description, params = {} } = task
@@ -25,34 +24,22 @@ export async function runAnalyticsAgent({ task, campaignId, campaignName, channe
   const parsed = parseOutput(response.content[0].text)
   const outputText = formatInsights(parsed)
 
-  // Analytics is an internal step — status 'internal', never surfaces to Slack inbox
-  const { data: item, error } = await supabase
-    .from('content_log')
-    .insert({
-      campaign_id:   campaignId,
-      product,
-      agent:         'analytics',
-      task_type:     task.type,
-      platform:      null,
-      content_type:  'insight',
-      output:        outputText,
-      metadata: {
-        summary:         parsed.summary         ?? '',
-        wins:            parsed.wins            ?? [],
-        concerns:        parsed.concerns        ?? [],
-        insights:        parsed.insights        ?? [],
-        recommendations: parsed.recommendations ?? [],
-      },
-      status:        'internal',
-      slack_channel: channelId,
-    })
-    .select()
-    .single()
+  console.log(`[analytics-agent] Done (in-memory): ${task.type}`)
 
-  if (error) throw new Error(`content_log insert failed: ${error.message}`)
-
-  console.log(`[analytics-agent] Done (internal): ${item.id}`)
-  return item
+  // Analytics is internal — not persisted to content_log (no approval needed)
+  return {
+    agent:     'analytics',
+    task_type: task.type,
+    product,
+    output:    outputText,
+    metadata: {
+      summary:         parsed.summary         ?? '',
+      wins:            parsed.wins            ?? [],
+      concerns:        parsed.concerns        ?? [],
+      insights:        parsed.insights        ?? [],
+      recommendations: parsed.recommendations ?? [],
+    },
+  }
 }
 
 async function fetchAnalyticsData(product) {
