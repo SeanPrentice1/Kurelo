@@ -56,7 +56,7 @@ export async function runMarketingDirector({ brief, memoryText, campaignId, camp
 async function generatePlan({ brief, product, memoryText }) {
   const response = await anthropic.messages.create({
     model:      MODELS.DIRECTOR,
-    max_tokens: 2048,
+    max_tokens: 4096,
     system: [
       {
         type:          'text',
