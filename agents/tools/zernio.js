@@ -1,94 +1,47 @@
 /**
- * Zernio API client — social scheduling, media upload, analytics, and inbox.
- * Drop-in replacement for the previous PostFast integration.
- * Auth: zernio-api-key header + ZERNIO_API_KEY env var.
+ * Zernio API client — social scheduling, analytics, and inbox.
+ *
+ * Auth:   Authorization: Bearer ZERNIO_API_KEY
+ * Base:   https://zernio.com/api/v1
+ *
+ * Media is passed as a direct public URL — no presigned upload step.
  */
 
-const BASE_URL = 'https://api.zernio.com'
+const BASE_URL = 'https://zernio.com/api/v1'
 
 function headers() {
   const key = process.env.ZERNIO_API_KEY
   if (!key) throw new Error('ZERNIO_API_KEY is not set')
-  return { 'zernio-api-key': key, 'Content-Type': 'application/json' }
-}
-
-function authHeaders() {
-  const key = process.env.ZERNIO_API_KEY
-  if (!key) throw new Error('ZERNIO_API_KEY is not set')
-  return { 'zernio-api-key': key }
-}
-
-// ── Media upload ─────────────────────────────────────────────────────────────
-
-/**
- * Download an image from a public URL and upload it to Zernio via the
- * presigned S3 flow:
- *   1. POST /file/get-signed-upload-urls  → [{ key, signedUrl }]
- *   2. PUT  signedUrl                     → upload bytes directly to S3
- *
- * Returns { type, key, sortOrder } ready for use in mediaItems.
- * THROWS on failure — callers decide how to handle it.
- */
-export async function uploadMediaFromUrl(publicUrl, sortOrder = 0) {
-  // 1. Download the image from Supabase storage
-  const imageRes = await fetch(publicUrl)
-  if (!imageRes.ok) throw new Error(`Failed to download image from storage: ${imageRes.status}`)
-  const buffer      = Buffer.from(await imageRes.arrayBuffer())
-  const contentType = imageRes.headers.get('content-type') ?? 'image/png'
-
-  // 2. Request a presigned S3 upload URL from Zernio
-  const signedRes = await fetch(`${BASE_URL}/file/get-signed-upload-urls`, {
-    method:  'POST',
-    headers: headers(),
-    body:    JSON.stringify({ contentType, count: 1 }),
-  })
-  if (!signedRes.ok) {
-    const text = await signedRes.text()
-    throw new Error(`Zernio get-signed-upload-urls failed: ${signedRes.status} ${text}`)
+  return {
+    'Authorization':  `Bearer ${key}`,
+    'Content-Type':   'application/json',
   }
-  const signedData = await signedRes.json()
-  const { key, signedUrl } = Array.isArray(signedData) ? signedData[0] : signedData
-  if (!key || !signedUrl) {
-    throw new Error(`Zernio signed URL response missing key/signedUrl: ${JSON.stringify(signedData)}`)
-  }
-
-  // 3. PUT the image bytes directly to S3 via the presigned URL
-  const s3Res = await fetch(signedUrl, {
-    method:  'PUT',
-    headers: { 'Content-Type': contentType },
-    body:    buffer,
-  })
-  if (!s3Res.ok) throw new Error(`S3 presigned upload failed: ${s3Res.status}`)
-
-  const type = key.startsWith('video/') ? 'VIDEO' : 'IMAGE'
-  console.log(`[zernio] Media uploaded: ${key}`)
-  return { type, key, sortOrder }
 }
 
 // ── Account resolution ───────────────────────────────────────────────────────
 
 /**
- * Returns all connected social accounts.
+ * Returns all connected social accounts from Zernio.
  */
 export async function getAccounts() {
-  const res = await fetch(`${BASE_URL}/social-media/my-social-accounts`, {
-    headers: headers(),
-  })
+  const res = await fetch(`${BASE_URL}/accounts`, { headers: headers() })
   if (!res.ok) throw new Error(`Zernio getAccounts failed: ${res.status} ${await res.text()}`)
-  return res.json()
+  const data = await res.json()
+  // Handle both array and wrapped responses
+  return Array.isArray(data) ? data : (data.data ?? data.accounts ?? data.profiles ?? [])
 }
 
 /**
- * Resolves a platform name to a socialMediaId.
+ * Resolves a platform name to an accountId.
  * Throws if no connected account is found for that platform.
  */
-export async function resolveSocialMediaId(platform) {
+export async function resolveAccountId(platform) {
   const accounts = await getAccounts()
   const match = accounts.find(
     a => a.platform?.toLowerCase() === platform.toLowerCase()
   )
   if (!match) throw new Error(`No Zernio account connected for platform: ${platform}`)
-  return match.id
+  return match.id ?? match.accountId
 }
 
 // ── Scheduling ───────────────────────────────────────────────────────────────
@@ -96,29 +49,27 @@ export async function resolveSocialMediaId(platform) {
 /**
  * Schedule a post via Zernio.
  *
- * @param {object}   opts
- * @param {string}   opts.platform     - e.g. 'instagram', 'linkedin', 'twitter', 'tiktok'
- * @param {string}   opts.content      - Post text
- * @param {Date}     opts.scheduledAt  - When to publish (UTC)
- * @param {object[]} [opts.mediaItems] - Pre-uploaded media: [{ type, key, sortOrder }]
+ * Media (if any) is passed as a direct public URL — Zernio fetches it itself.
+ * No upload step required.
+ *
+ * @param {object}  opts
+ * @param {string}  opts.platform     - e.g. 'instagram', 'linkedin', 'twitter', 'tiktok'
+ * @param {string}  opts.content      - Post text
+ * @param {Date}    opts.scheduledAt  - When to publish (UTC)
+ * @param {string}  [opts.imageUrl]   - Public image URL to attach (optional)
  */
-export async function schedulePost({ platform, content, scheduledAt, mediaItems = [] }) {
-  const socialMediaId = await resolveSocialMediaId(platform)
-  const controls      = buildControls(platform)
+export async function schedulePost({ platform, content, scheduledAt, imageUrl }) {
+  const accountId  = await resolveAccountId(platform)
+  const mediaItems = imageUrl ? [{ type: 'IMAGE', url: imageUrl }] : []
 
   const body = {
-    posts: [
-      {
-        content,
-        scheduledAt: scheduledAt.toISOString(),
-        socialMediaId,
-        ...(mediaItems.length ? { mediaItems } : {}),
-      },
-    ],
-    ...(Object.keys(controls).length ? { controls } : {}),
+    platforms:    [{ platform: platform.toLowerCase(), accountId }],
+    content,
+    scheduledFor: scheduledAt instanceof Date ? scheduledAt.toISOString() : scheduledAt,
+    ...(mediaItems.length ? { mediaItems } : {}),
   }
 
-  const res = await fetch(`${BASE_URL}/social-posts`, {
+  const res = await fetch(`${BASE_URL}/posts`, {
     method:  'POST',
     headers: headers(),
     body:    JSON.stringify(body),
@@ -131,19 +82,16 @@ export async function schedulePost({ platform, content, scheduledAt, mediaItems 
 // ── Analytics ────────────────────────────────────────────────────────────────
 
 /**
- * Fetch posting history and performance data from Zernio analytics.
+ * Fetch posting history and performance data from Zernio.
  *
  * @param {string} [platform]  - Filter by platform (optional)
  * @param {number} [days=30]   - Lookback window in days
- * @returns {object} Analytics payload from Zernio
  */
 export async function getAnalytics({ platform, days = 30 } = {}) {
   const params = new URLSearchParams({ days: String(days) })
   if (platform) params.set('platform', platform)
 
-  const res = await fetch(`${BASE_URL}/analytics?${params}`, {
-    headers: headers(),
-  })
+  const res = await fetch(`${BASE_URL}/analytics?${params}`, { headers: headers() })
   if (!res.ok) throw new Error(`Zernio getAnalytics failed: ${res.status} ${await res.text()}`)
   return res.json()
 }
@@ -159,7 +107,6 @@ export async function getAnalytics({ platform, days = 30 } = {}) {
  * @param {string}  [opts.type]      - 'comment' | 'dm' | undefined (all)
  * @param {number}  [opts.limit=50]  - Max items to return
  * @param {string}  [opts.cursor]    - Pagination cursor from previous response
- * @returns {{ items: object[], nextCursor: string|null }}
  */
 export async function getInboxMessages({ platform, type, limit = 50, cursor } = {}) {
   const params = new URLSearchParams({ limit: String(limit) })
@@ -167,30 +114,17 @@ export async function getInboxMessages({ platform, type, limit = 50, cursor } = 
   if (type)     params.set('type', type)
   if (cursor)   params.set('cursor', cursor)
 
-  const res = await fetch(`${BASE_URL}/inbox?${params}`, {
-    headers: headers(),
-  })
+  const res = await fetch(`${BASE_URL}/inbox?${params}`, { headers: headers() })
   if (!res.ok) throw new Error(`Zernio getInboxMessages failed: ${res.status} ${await res.text()}`)
 
   const data = await res.json()
   return {
-    items:      data.items      ?? data.data     ?? [],
-    nextCursor: data.nextCursor ?? data.next      ?? null,
+    items:      data.items      ?? data.data  ?? [],
+    nextCursor: data.nextCursor ?? data.next  ?? null,
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function buildControls(platform) {
-  switch (platform?.toLowerCase()) {
-    case 'instagram':
-      return { instagramPublishType: 'TIMELINE', instagramPostToGrid: true }
-    case 'tiktok':
-      return { tiktokPrivacy: 'PUBLIC', tiktokAllowComments: true }
-    default:
-      return {}
-  }
-}
+// ── Text helpers ─────────────────────────────────────────────────────────────
 
 /**
  * Format output + metadata into a platform-ready post string.

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-const BASE_URL = 'https://api.zernio.com'
+const BASE_URL = 'https://zernio.com/api/v1'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -66,39 +66,42 @@ export default async function handler(req, res) {
 
 async function zernioSchedule(item) {
   const authHeaders = {
-    'zernio-api-key': process.env.ZERNIO_API_KEY,
+    'Authorization': `Bearer ${process.env.ZERNIO_API_KEY}`,
+    'Content-Type':  'application/json',
   }
 
-  // Resolve socialMediaId for this platform
-  const accountsRes = await fetch(`${BASE_URL}/social-media/my-social-accounts`, {
-    headers: authHeaders,
-  })
+  // Resolve accountId for this platform
+  const accountsRes = await fetch(`${BASE_URL}/accounts`, { headers: authHeaders })
   if (!accountsRes.ok) throw new Error(`Zernio accounts fetch failed: ${accountsRes.status}`)
-  const accounts = await accountsRes.json()
+  const accountsData = await accountsRes.json()
+  const accounts     = Array.isArray(accountsData) ? accountsData : (accountsData.data ?? accountsData.accounts ?? [])
 
   const account = accounts.find(
     a => a.platform?.toLowerCase() === item.platform?.toLowerCase()
   )
   if (!account) throw new Error(`No Zernio account for platform: ${item.platform}`)
 
+  const accountId  = account.id ?? account.accountId
   const content    = buildPostText(item.output, item.metadata ?? {}, item.platform)
-  const scheduledAt = chooseScheduleTime(item.platform, item.product)
-  const controls   = buildControls(item.platform)
+  const imageUrl   = item.metadata?.image_url ?? null
+  const scheduledFor = chooseScheduleTime(item.platform, item.product).toISOString()
 
   const body = {
-    posts: [{ content, scheduledAt: scheduledAt.toISOString(), socialMediaId: account.id }],
-    ...(Object.keys(controls).length ? { controls } : {}),
+    platforms:    [{ platform: item.platform.toLowerCase(), accountId }],
+    content,
+    scheduledFor,
+    ...(imageUrl ? { mediaItems: [{ type: 'IMAGE', url: imageUrl }] } : {}),
   }
 
-  const postRes = await fetch(`${BASE_URL}/social-posts`, {
+  const postRes = await fetch(`${BASE_URL}/posts`, {
     method:  'POST',
-    headers: { ...authHeaders, 'Content-Type': 'application/json' },
+    headers: authHeaders,
     body:    JSON.stringify(body),
   })
   if (!postRes.ok) throw new Error(`Zernio schedule failed: ${postRes.status} ${await postRes.text()}`)
 
   const data = await postRes.json()
-  return data?.id ?? data?.posts?.[0]?.id ?? null
+  return data?.id ?? data?.posts?.[0]?.id ?? data?.data?.id ?? null
 }
 
 function buildPostText(output, metadata, platform) {
@@ -126,15 +129,4 @@ function chooseScheduleTime(platform, product) {
     }
   }
   return target
-}
-
-function buildControls(platform) {
-  switch (platform?.toLowerCase()) {
-    case 'instagram':
-      return { instagramPublishType: 'TIMELINE', instagramPostToGrid: true }
-    case 'tiktok':
-      return { tiktokPrivacy: 'PUBLIC', tiktokAllowComments: true }
-    default:
-      return {}
-  }
 }
