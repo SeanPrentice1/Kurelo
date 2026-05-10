@@ -243,6 +243,80 @@ export function resolvedBlocks({ decision, decidedBy, output, agent, taskType })
   ]
 }
 
+/**
+ * Schedule suggestion card posted after content approval.
+ * Each option button encodes contentId + ISO date as the action value.
+ * @param {object} opts
+ * @param {string}   opts.contentId
+ * @param {string}   opts.platform
+ * @param {string}   opts.product
+ * @param {Date[]}   opts.options    - 3 suggested Date objects
+ */
+export function scheduleOptionsBlocks({ contentId, platform, product, options }) {
+  const platLabel = PLATFORM_LABELS[platform?.toLowerCase()] ?? platform ?? 'post'
+  const productBadge = product === 'crevaxo' ? '🟠 Crevaxo' : '🟣 Rostura'
+
+  const formatOption = (date) => {
+    const day  = date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+    const time = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false })
+    return `${day} · ${time} UTC`
+  }
+
+  const makeButton = (date, label, style) => ({
+    type:      'button',
+    text:      { type: 'plain_text', text: label, emoji: true },
+    ...(style ? { style } : {}),
+    action_id: 'confirm_schedule',
+    value:     `${contentId}|${date.toISOString()}`,
+  })
+
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `📅 *When should this ${platLabel} post go out?*\n${productBadge} — pick a slot or choose an alternative.`,
+      },
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Suggested:* ${formatOption(options[0])}` },
+    },
+    {
+      type: 'actions',
+      elements: [
+        makeButton(options[0], '✅ Confirm suggested', 'primary'),
+        ...(options[1] ? [makeButton(options[1], `📅 ${formatOption(options[1])}`)] : []),
+        ...(options[2] ? [makeButton(options[2], `📅 ${formatOption(options[2])}`)] : []),
+      ],
+    },
+    {
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '_Choosing a slot commits the post to PostFast. You can still edit it there before it publishes._' }],
+    },
+  ]
+}
+
+/**
+ * Replace the schedule options card once a slot is confirmed.
+ */
+export function scheduleConfirmedBlocks({ platform, scheduledAt, hasImage }) {
+  const platLabel = PLATFORM_LABELS[platform?.toLowerCase()] ?? platform ?? 'post'
+  const dateStr   = scheduledAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const timeStr   = scheduledAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false })
+  const imageNote = hasImage ? ' with image' : ''
+
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `✅ *${platLabel} post scheduled${imageNote}*\n📅 Going out on *${dateStr}* at *${timeStr} UTC*\n_You can view or edit this post in PostFast before it publishes._`,
+      },
+    },
+  ]
+}
+
 function actionButtons(contentId) {
   return {
     type: 'actions',
