@@ -2,6 +2,16 @@ import { promoteToAssetLibrary } from '../../tools/memory.js'
 import { schedulePost, uploadMediaFromUrl, buildPostText } from '../../tools/postfast.js'
 import supabase from '../../tools/supabase.js'
 
+const PLATFORM_LABELS = {
+  instagram:  'Instagram',
+  tiktok:     'TikTok',
+  linkedin:   'LinkedIn',
+  reddit:     'Reddit',
+  twitter:    'Twitter/X',
+  meta_ads:   'Meta Ads',
+  google_ads: 'Google Ads',
+}
+
 /**
  * Called after a content item is approved via Slack or web dashboard.
  *
@@ -35,6 +45,8 @@ export async function scheduleApprovedContent({ contentId, channelId, slackClien
   const imageUrl     = item.metadata?.image_url ?? null
   let   postfastPostId = null
 
+  const scheduledAt = chooseScheduleTime(platform, item.product)
+
   if (platform && process.env.POSTFAST_API_KEY) {
     // If this post has an image, upload it first — never schedule without it
     let mediaItems = []
@@ -45,43 +57,22 @@ export async function scheduleApprovedContent({ contentId, channelId, slackClien
         console.log(`[scheduler-agent] Image uploaded to PostFast: ${uploaded.key}`)
       } catch (err) {
         console.error(`[scheduler-agent] Image upload failed for ${contentId}: ${err.message}`)
-
-        // Notify the user — do not schedule
         await notifyImageUploadFailed({ item, err, channelId, slackClient })
-
-        // Mark as failed so the dashboard reflects the problem
-        await supabase
-          .from('content_log')
-          .update({ status: 'failed' })
-          .eq('id', contentId)
-
+        await supabase.from('content_log').update({ status: 'failed' }).eq('id', contentId)
         return { status: 'failed', reason: 'image_upload_failed', error: err.message }
       }
     }
 
     try {
-      const text        = buildPostText(item.output, item.metadata ?? {}, platform)
-      const scheduledAt = chooseScheduleTime(platform, item.product)
-
-      const result = await schedulePost({
-        platform,
-        content:    text,
-        scheduledAt,
-        mediaItems,
-      })
+      const text   = buildPostText(item.output, item.metadata ?? {}, platform)
+      const result = await schedulePost({ platform, content: text, scheduledAt, mediaItems })
 
       postfastPostId = result?.id ?? result?.posts?.[0]?.id ?? null
       console.log(`[scheduler-agent] PostFast scheduled: ${postfastPostId} for ${platform}`)
     } catch (err) {
       console.error(`[scheduler-agent] PostFast scheduling failed for ${contentId}: ${err.message}`)
-
       await notifySchedulingFailed({ item, err, channelId, slackClient })
-
-      await supabase
-        .from('content_log')
-        .update({ status: 'failed' })
-        .eq('id', contentId)
-
+      await supabase.from('content_log').update({ status: 'failed' }).eq('id', contentId)
       return { status: 'failed', reason: 'postfast_error', error: err.message }
     }
   }
@@ -92,17 +83,55 @@ export async function scheduleApprovedContent({ contentId, channelId, slackClien
     .update({
       status:           'scheduled',
       postfast_post_id: postfastPostId,
+      scheduled_for:    scheduledAt.toISOString(),
       metadata:         { ...(item.metadata ?? {}), postfast_id: postfastPostId },
     })
     .eq('id', contentId)
 
   await promoteToAssetLibrary(contentId)
 
-  console.log(`[scheduler-agent] Content ${contentId} scheduled`)
-  return { status: 'scheduled', postfastPostId }
+  // Confirm to the user that the post is queued
+  await notifyScheduled({ item, scheduledAt, hasImage: !!imageUrl, channelId, slackClient })
+
+  console.log(`[scheduler-agent] Content ${contentId} scheduled for ${scheduledAt.toISOString()}`)
+  return { status: 'scheduled', postfastPostId, scheduledAt }
 }
 
-// ── Slack failure notifications ──────────────────────────────────────────────
+// ── Slack notifications ──────────────────────────────────────────────────────
+
+async function notifyScheduled({ item, scheduledAt, hasImage, channelId, slackClient }) {
+  if (!slackClient || !channelId) return
+  try {
+    const platformLabel = PLATFORM_LABELS[item.platform?.toLowerCase()] ?? item.platform ?? 'social'
+    const dateStr = scheduledAt.toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+    })
+    const timeStr = scheduledAt.toLocaleTimeString('en-GB', {
+      hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false,
+    })
+    const imageNote = hasImage ? ' with image' : ''
+
+    await slackClient.chat.postMessage({
+      channel: channelId,
+      text:    `✅ ${platformLabel} post scheduled for ${dateStr} at ${timeStr} UTC`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `✅ *${platformLabel} post scheduled${imageNote}*\n\n📅 Going out on *${dateStr}* at *${timeStr} UTC*`,
+          },
+        },
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: `_You can view or edit this post in PostFast before it publishes._` }],
+        },
+      ],
+    })
+  } catch (slackErr) {
+    console.error(`[scheduler-agent] Failed to send scheduled notification: ${slackErr.message}`)
+  }
+}
 
 async function notifyImageUploadFailed({ item, err, channelId, slackClient }) {
   if (!slackClient || !channelId) return
