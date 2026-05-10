@@ -37,11 +37,18 @@ export async function getAccounts() {
  */
 export async function resolveAccountId(platform) {
   const accounts = await getAccounts()
+  console.log('[zernio] accounts response:', JSON.stringify(accounts).substring(0, 500))
+
   const match = accounts.find(
-    a => a.platform?.toLowerCase() === platform.toLowerCase()
+    a => (a.platform ?? a.type ?? a.network ?? '').toLowerCase() === platform.toLowerCase()
   )
-  if (!match) throw new Error(`No Zernio account connected for platform: ${platform}`)
-  return match.id ?? match.accountId
+  if (!match) throw new Error(`No Zernio account connected for platform: ${platform}. Available: ${accounts.map(a => a.platform ?? a.type ?? a.network ?? JSON.stringify(a)).join(', ')}`)
+
+  // Try all known field names Zernio might use for the account identifier
+  const accountId = match.accountId ?? match.id ?? match._id ?? match.profileId ?? match.socialAccountId ?? match.social_account_id
+  console.log('[zernio] resolved account:', JSON.stringify(match).substring(0, 200))
+  if (!accountId) throw new Error(`Zernio account for ${platform} found but accountId field is missing. Keys: ${Object.keys(match).join(', ')}`)
+  return accountId
 }
 
 // ── Scheduling ───────────────────────────────────────────────────────────────

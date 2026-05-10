@@ -76,12 +76,15 @@ async function zernioSchedule(item) {
   const accountsData = await accountsRes.json()
   const accounts     = Array.isArray(accountsData) ? accountsData : (accountsData.data ?? accountsData.accounts ?? [])
 
-  const account = accounts.find(
-    a => a.platform?.toLowerCase() === item.platform?.toLowerCase()
-  )
-  if (!account) throw new Error(`No Zernio account for platform: ${item.platform}`)
+  console.log('[approve] zernio accounts:', JSON.stringify(accounts).substring(0, 500))
 
-  const accountId  = account.id ?? account.accountId
+  const account = accounts.find(
+    a => (a.platform ?? a.type ?? a.network ?? '').toLowerCase() === item.platform?.toLowerCase()
+  )
+  if (!account) throw new Error(`No Zernio account for platform: ${item.platform}. Available: ${accounts.map(a => a.platform ?? a.type ?? a.network ?? JSON.stringify(a)).join(', ')}`)
+
+  const accountId = account.accountId ?? account.id ?? account._id ?? account.profileId ?? account.socialAccountId ?? account.social_account_id
+  if (!accountId) throw new Error(`Zernio account for ${item.platform} found but accountId field missing. Keys: ${Object.keys(account).join(', ')}`)
   const content    = buildPostText(item.output, item.metadata ?? {}, item.platform)
   const imageUrl   = item.metadata?.image_url ?? null
   const scheduledFor = chooseScheduleTime(item.platform, item.product).toISOString()
