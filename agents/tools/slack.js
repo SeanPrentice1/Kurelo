@@ -292,7 +292,7 @@ export function scheduleOptionsBlocks({ contentId, platform, product, options })
     },
     {
       type: 'context',
-      elements: [{ type: 'mrkdwn', text: '_Choosing a slot commits the post to PostFast. You can still edit it there before it publishes._' }],
+      elements: [{ type: 'mrkdwn', text: '_Choosing a slot commits the post to Zernio. You can still edit it there before it publishes._' }],
     },
   ]
 }
@@ -311,7 +311,7 @@ export function scheduleConfirmedBlocks({ platform, scheduledAt, hasImage }) {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `✅ *${platLabel} post scheduled${imageNote}*\n📅 Going out on *${dateStr}* at *${timeStr} UTC*\n_You can view or edit this post in PostFast before it publishes._`,
+        text: `✅ *${platLabel} post scheduled${imageNote}*\n📅 Going out on *${dateStr}* at *${timeStr} UTC*\n_You can view or edit this post in Zernio before it publishes._`,
       },
     },
   ]

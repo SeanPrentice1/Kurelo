@@ -1,5 +1,5 @@
 import { promoteToAssetLibrary } from '../../tools/memory.js'
-import { schedulePost, uploadMediaFromUrl, buildPostText } from '../../tools/postfast.js'
+import { schedulePost, uploadMediaFromUrl, buildPostText } from '../../tools/zernio.js'
 import { scheduleOptionsBlocks, scheduleConfirmedBlocks } from '../../tools/slack.js'
 import supabase from '../../tools/supabase.js'
 
@@ -28,7 +28,7 @@ const PRIME_HOUR = {
  * Step 1 — Called immediately after content is approved.
  * Calculates smart schedule options (avoids days already used by this
  * platform/product), then posts a slot-picker to Slack.
- * Does NOT call PostFast yet.
+ * Does NOT call Zernio yet.
  */
 export async function suggestSchedule({ contentId, channelId, slackClient }) {
   console.log(`[scheduler-agent] Suggesting schedule for: ${contentId}`)
@@ -67,7 +67,7 @@ export async function suggestSchedule({ contentId, channelId, slackClient }) {
 
 /**
  * Step 2 — Called when the user clicks a schedule option button.
- * Uploads image (if any), commits to PostFast, updates DB, confirms in Slack.
+ * Uploads image (if any), commits to Zernio, updates DB, confirms in Slack.
  *
  * @param {string} contentId
  * @param {Date}   scheduledAt  - The chosen slot
@@ -92,9 +92,9 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
 
   const platform = item.platform
   const imageUrl = item.metadata?.image_url ?? null
-  let   postfastPostId = null
+  let   zernioPostId = null
 
-  if (platform && process.env.POSTFAST_API_KEY) {
+  if (platform && process.env.ZERNIO_API_KEY) {
     // Image gate — must upload before scheduling; never post without it
     let mediaItems = []
     if (imageUrl) {
@@ -106,7 +106,7 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
         console.error(`[scheduler-agent] Image upload failed: ${err.message}`)
         await notifyFailed({
           item, channelId, slackClient, messageTs,
-          reason: `The image failed to upload to PostFast.\n\n*Error:* ${err.message}\n\nPlease schedule it manually from the asset library.`,
+          reason: `The image failed to upload to Zernio.\n\n*Error:* ${err.message}\n\nPlease schedule it manually from the asset library.`,
         })
         await supabase.from('content_log').update({ status: 'failed' }).eq('id', contentId)
         return
@@ -116,13 +116,13 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
     try {
       const text   = buildPostText(item.output, item.metadata ?? {}, platform)
       const result = await schedulePost({ platform, content: text, scheduledAt, mediaItems })
-      postfastPostId = result?.id ?? result?.posts?.[0]?.id ?? null
-      console.log(`[scheduler-agent] PostFast scheduled: ${postfastPostId}`)
+      zernioPostId = result?.id ?? result?.posts?.[0]?.id ?? null
+      console.log(`[scheduler-agent] Zernio scheduled: ${zernioPostId}`)
     } catch (err) {
-      console.error(`[scheduler-agent] PostFast error: ${err.message}`)
+      console.error(`[scheduler-agent] Zernio error: ${err.message}`)
       await notifyFailed({
         item, channelId, slackClient, messageTs,
-        reason: `PostFast returned an error.\n\n*Error:* ${err.message}`,
+        reason: `Zernio returned an error.\n\n*Error:* ${err.message}`,
       })
       await supabase.from('content_log').update({ status: 'failed' }).eq('id', contentId)
       return
@@ -132,10 +132,10 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
   await supabase
     .from('content_log')
     .update({
-      status:           'scheduled',
-      postfast_post_id: postfastPostId,
-      scheduled_for:    scheduledAt.toISOString(),
-      metadata:         { ...(item.metadata ?? {}), postfast_id: postfastPostId },
+      status:        'scheduled',
+      zernio_post_id: zernioPostId,
+      scheduled_for: scheduledAt.toISOString(),
+      metadata:      { ...(item.metadata ?? {}), zernio_id: zernioPostId },
     })
     .eq('id', contentId)
 
