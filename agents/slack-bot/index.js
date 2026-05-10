@@ -109,7 +109,7 @@ export function createSlackApp() {
         })
       }
 
-      // Suggest a schedule slot — does NOT post to PostFast yet
+      // Suggest a schedule slot — does NOT post to Zernio yet
       suggestSchedule({ contentId, channelId, slackClient: client }).catch(err => {
         console.error(`[slack-bot] suggestSchedule error for ${contentId}:`, err)
       })

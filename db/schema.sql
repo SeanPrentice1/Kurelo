@@ -50,6 +50,7 @@ create table if not exists content_log (
   slack_channel    text,
   slack_ts         text,                   -- ts of the approval message in Slack
   buffer_update_id text,                   -- Buffer queue entry ID once scheduled
+  zernio_post_id   text,                   -- Zernio queue entry ID once scheduled
   scheduled_for    timestamptz,
   approved_at      timestamptz,
   approved_by      text,

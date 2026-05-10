@@ -1,5 +1,6 @@
 import { anthropic, MODELS } from '../../tools/anthropic.js'
 import { ANALYTICS_SYSTEM_PROMPT } from '../../prompts/analytics.js'
+import { getAnalytics } from '../../tools/zernio.js'
 
 export async function runAnalyticsAgent({ task, campaignId, campaignName, channelId, slackClient, notifySlack = true }) {
   const { product, description, params = {} } = task
@@ -44,16 +45,19 @@ export async function runAnalyticsAgent({ task, campaignId, campaignName, channe
 
 async function fetchAnalyticsData(product) {
   const base = process.env.KURELO_URL
-  if (!base) return { posthog: null, stripe: null, note: 'KURELO_URL not configured' }
 
-  const [phResult, stripeResult] = await Promise.allSettled([
-    fetch(`${base}/api/posthog`).then(r => r.json()),
-    fetch(`${base}/api/stripe`).then(r => r.json()),
+  const [phResult, stripeResult, zernioResult] = await Promise.allSettled([
+    base ? fetch(`${base}/api/posthog`).then(r => r.json()) : Promise.resolve(null),
+    base ? fetch(`${base}/api/stripe`).then(r => r.json())  : Promise.resolve(null),
+    process.env.ZERNIO_API_KEY ? getAnalytics({ days: 30 }) : Promise.resolve(null),
   ])
 
   return {
-    posthog: phResult.status === 'fulfilled' ? phResult.value[product] ?? phResult.value : null,
+    posthog: phResult.status === 'fulfilled' && phResult.value
+      ? phResult.value[product] ?? phResult.value
+      : null,
     stripe:  stripeResult.status === 'fulfilled' ? stripeResult.value : null,
+    zernio:  zernioResult.status === 'fulfilled' ? zernioResult.value : null,
   }
 }
 
@@ -84,7 +88,26 @@ function buildPrompt({ product, description, params, analyticsData }) {
     parts.push(`Active subs: ${s.activeSubscriptions} | New (30d): ${s.newSubscriptions30d}`)
   }
 
-  if (!analyticsData.posthog && !analyticsData.stripe?.configured) {
+  if (analyticsData.zernio) {
+    parts.push('\n=== ZERNIO SOCIAL DATA (last 30 days) ===')
+    const z = analyticsData.zernio
+    if (z.posts?.length)     parts.push(`Posts published: ${z.posts.length}`)
+    if (z.totalImpressions)  parts.push(`Total impressions: ${z.totalImpressions}`)
+    if (z.totalEngagements)  parts.push(`Total engagements: ${z.totalEngagements}`)
+    if (z.engagementRate)    parts.push(`Avg engagement rate: ${z.engagementRate?.toFixed(2)}%`)
+    if (z.topPosts?.length) {
+      parts.push(`Top posts:\n${z.topPosts.slice(0, 3).map(p =>
+        `  - [${p.platform}] ${p.content?.substring(0, 80)}... (${p.engagements} engagements)`
+      ).join('\n')}`)
+    }
+    if (z.platformBreakdown) {
+      parts.push(`Platform breakdown: ${Object.entries(z.platformBreakdown)
+        .map(([p, d]) => `${p}: ${d.posts} posts, ${d.engagements} engagements`)
+        .join(' | ')}`)
+    }
+  }
+
+  if (!analyticsData.posthog && !analyticsData.stripe?.configured && !analyticsData.zernio) {
     parts.push('\nNote: Live analytics data unavailable. Provide general insights based on product context.')
   }
 
