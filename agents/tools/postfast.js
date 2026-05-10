@@ -6,47 +6,49 @@ function headers() {
   return { 'pf-api-key': key, 'Content-Type': 'application/json' }
 }
 
-function authHeaders() {
-  const key = process.env.POSTFAST_API_KEY
-  if (!key) throw new Error('POSTFAST_API_KEY is not set')
-  return { 'pf-api-key': key }
-}
-
 /**
- * Download an image from a public URL and upload it to PostFast media storage.
+ * Download an image from a public URL and upload it to PostFast via the
+ * presigned S3 flow:
+ *   1. POST /file/get-signed-upload-urls  → { key, signedUrl }
+ *   2. PUT  signedUrl                     → upload bytes directly to S3
+ *
  * Returns { type, key, sortOrder } ready for use in mediaItems.
  * THROWS on failure — callers decide how to handle it.
  */
 export async function uploadMediaFromUrl(publicUrl, sortOrder = 0) {
-  // Download the image
+  // 1. Download the image from Supabase storage
   const imageRes = await fetch(publicUrl)
   if (!imageRes.ok) throw new Error(`Failed to download image from storage: ${imageRes.status}`)
-  const buffer = Buffer.from(await imageRes.arrayBuffer())
+  const buffer      = Buffer.from(await imageRes.arrayBuffer())
   const contentType = imageRes.headers.get('content-type') ?? 'image/png'
-  const ext = contentType.includes('jpeg') ? 'jpg' : 'png'
-  const filename = `upload-${Date.now()}.${ext}`
 
-  // Upload to PostFast
-  const form = new FormData()
-  form.append('file', new Blob([buffer], { type: contentType }), filename)
-
-  const uploadRes = await fetch(`${BASE_URL}/media`, {
+  // 2. Request a presigned S3 upload URL from PostFast
+  const signedRes = await fetch(`${BASE_URL}/file/get-signed-upload-urls`, {
     method:  'POST',
-    headers: authHeaders(),
-    body:    form,
+    headers: headers(),
+    body:    JSON.stringify({ contentType, count: 1 }),
   })
-
-  if (!uploadRes.ok) {
-    const text = await uploadRes.text()
-    throw new Error(`PostFast media upload failed: ${uploadRes.status} ${text}`)
+  if (!signedRes.ok) {
+    const text = await signedRes.text()
+    throw new Error(`PostFast get-signed-upload-urls failed: ${signedRes.status} ${text}`)
+  }
+  const signedData = await signedRes.json()
+  // API returns an array: [{ key, signedUrl }]
+  const { key, signedUrl } = Array.isArray(signedData) ? signedData[0] : signedData
+  if (!key || !signedUrl) {
+    throw new Error(`PostFast signed URL response missing key/signedUrl: ${JSON.stringify(signedData)}`)
   }
 
-  const data = await uploadRes.json()
-  // PostFast returns { key } in format 'image/uuid.ext'
-  const key = data.key ?? data.data?.key ?? null
-  if (!key) throw new Error(`PostFast media upload returned no key: ${JSON.stringify(data)}`)
+  // 3. PUT the image bytes directly to S3 via the presigned URL
+  const s3Res = await fetch(signedUrl, {
+    method:  'PUT',
+    headers: { 'Content-Type': contentType },
+    body:    buffer,
+  })
+  if (!s3Res.ok) throw new Error(`S3 presigned upload failed: ${s3Res.status}`)
 
   const type = key.startsWith('video/') ? 'VIDEO' : 'IMAGE'
+  console.log(`[postfast] Media uploaded: ${key}`)
   return { type, key, sortOrder }
 }
 
@@ -75,16 +77,6 @@ export async function resolveSocialMediaId(platform) {
   return match.id
 }
 
-/**
- * Schedule a post via PostFast.
- *
- * @param {object} opts
- * @param {string} opts.platform  - e.g. 'instagram', 'linkedin', 'twitter', 'tiktok'
- * @param {string} opts.content   - Post text
- * @param {Date}   opts.scheduledAt - When to publish (UTC)
- * @param {string[]} [opts.mediaUrls] - Optional media URLs
- * @returns {object} PostFast API response
- */
 /**
  * Schedule a post via PostFast.
  *
