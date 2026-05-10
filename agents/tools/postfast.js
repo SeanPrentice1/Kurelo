@@ -6,6 +6,54 @@ function headers() {
   return { 'pf-api-key': key, 'Content-Type': 'application/json' }
 }
 
+function authHeaders() {
+  const key = process.env.POSTFAST_API_KEY
+  if (!key) throw new Error('POSTFAST_API_KEY is not set')
+  return { 'pf-api-key': key }
+}
+
+/**
+ * Download an image from a public URL and upload it to PostFast media storage.
+ * Returns { type, key, sortOrder } ready for use in mediaItems, or null on failure.
+ */
+export async function uploadMediaFromUrl(publicUrl, sortOrder = 0) {
+  try {
+    // Download the image
+    const imageRes = await fetch(publicUrl)
+    if (!imageRes.ok) throw new Error(`Failed to download image: ${imageRes.status}`)
+    const buffer = Buffer.from(await imageRes.arrayBuffer())
+    const contentType = imageRes.headers.get('content-type') ?? 'image/png'
+    const ext = contentType.includes('jpeg') ? 'jpg' : 'png'
+    const filename = `upload-${Date.now()}.${ext}`
+
+    // Upload to PostFast
+    const form = new FormData()
+    form.append('file', new Blob([buffer], { type: contentType }), filename)
+
+    const uploadRes = await fetch(`${BASE_URL}/media`, {
+      method:  'POST',
+      headers: authHeaders(),
+      body:    form,
+    })
+
+    if (!uploadRes.ok) {
+      const text = await uploadRes.text()
+      throw new Error(`PostFast media upload failed: ${uploadRes.status} ${text}`)
+    }
+
+    const data = await uploadRes.json()
+    // PostFast returns { key } in format 'image/uuid.ext'
+    const key = data.key ?? data.data?.key ?? null
+    if (!key) throw new Error(`PostFast media upload returned no key: ${JSON.stringify(data)}`)
+
+    const type = key.startsWith('video/') ? 'VIDEO' : 'IMAGE'
+    return { type, key, sortOrder }
+  } catch (err) {
+    console.warn(`[postfast] Media upload failed (continuing without media): ${err.message}`)
+    return null
+  }
+}
+
 /**
  * Returns all connected social accounts.
  * Each account has: id (UUID), platform, username, etc.
@@ -46,7 +94,11 @@ export async function schedulePost({ platform, content, scheduledAt, mediaUrls =
 
   const controls = buildControls(platform)
 
-  const mediaItems = mediaUrls.map(url => ({ url }))
+  // Upload each media URL to PostFast storage to get a properly formatted key
+  const uploadedMedia = await Promise.all(
+    mediaUrls.map((url, i) => uploadMediaFromUrl(url, i))
+  )
+  const mediaItems = uploadedMedia.filter(Boolean)
 
   const body = {
     posts: [
