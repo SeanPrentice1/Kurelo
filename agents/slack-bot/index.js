@@ -179,7 +179,7 @@ export function createSlackApp() {
   })
 
   // ── Confirm schedule button ────────────────────────────────
-  app.action('confirm_schedule', async ({ action, ack, body, client }) => {
+  app.action(/^confirm_schedule_\d+$/, async ({ action, ack, body, client }) => {
     await ack()
 
     // value is encoded as "contentId|isoDate"
