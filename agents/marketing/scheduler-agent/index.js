@@ -1,5 +1,5 @@
 import { promoteToAssetLibrary } from '../../tools/memory.js'
-import { schedulePost, uploadMediaFromUrl, buildPostText } from '../../tools/zernio.js'
+import { schedulePost, buildPostText } from '../../tools/zernio.js'
 import { scheduleOptionsBlocks, scheduleConfirmedBlocks } from '../../tools/slack.js'
 import supabase from '../../tools/supabase.js'
 
@@ -95,28 +95,12 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
   let   zernioPostId = null
 
   if (platform && process.env.ZERNIO_API_KEY) {
-    // Image gate — must upload before scheduling; never post without it
-    let mediaItems = []
-    if (imageUrl) {
-      try {
-        const uploaded = await uploadMediaFromUrl(imageUrl, 0)
-        mediaItems = [uploaded]
-        console.log(`[scheduler-agent] Image uploaded: ${uploaded.key}`)
-      } catch (err) {
-        console.error(`[scheduler-agent] Image upload failed: ${err.message}`)
-        await notifyFailed({
-          item, channelId, slackClient, messageTs,
-          reason: `The image failed to upload to Zernio.\n\n*Error:* ${err.message}\n\nPlease schedule it manually from the asset library.`,
-        })
-        await supabase.from('content_log').update({ status: 'failed' }).eq('id', contentId)
-        return
-      }
-    }
-
+    // Image gate — imageUrl is passed directly to Zernio (no upload step needed).
+    // If the post has an image and Zernio rejects it, we halt rather than post without it.
     try {
       const text   = buildPostText(item.output, item.metadata ?? {}, platform)
-      const result = await schedulePost({ platform, content: text, scheduledAt, mediaItems })
-      zernioPostId = result?.id ?? result?.posts?.[0]?.id ?? null
+      const result = await schedulePost({ platform, content: text, scheduledAt, imageUrl: imageUrl ?? undefined })
+      zernioPostId = result?.id ?? result?.posts?.[0]?.id ?? result?.data?.id ?? null
       console.log(`[scheduler-agent] Zernio scheduled: ${zernioPostId}`)
     } catch (err) {
       console.error(`[scheduler-agent] Zernio error: ${err.message}`)
