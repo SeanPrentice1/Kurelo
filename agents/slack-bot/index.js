@@ -1,6 +1,6 @@
 import { App, ExpressReceiver } from '@slack/bolt'
 import { runOrchestrator } from '../orchestrator/index.js'
-import { scheduleApprovedContent } from '../marketing/scheduler-agent/index.js'
+import { suggestSchedule, executeSchedule } from '../marketing/scheduler-agent/index.js'
 import { logDecision } from '../tools/memory.js'
 import { resolvedBlocks } from '../tools/slack.js'
 import supabase from '../tools/supabase.js'
@@ -109,9 +109,9 @@ export function createSlackApp() {
         })
       }
 
-      // Schedule + promote (async — don't block the Slack response)
-      scheduleApprovedContent({ contentId, channelId, slackClient: client }).catch(err => {
-        console.error(`[slack-bot] Post-approval processing error for ${contentId}:`, err)
+      // Suggest a schedule slot — does NOT post to PostFast yet
+      suggestSchedule({ contentId, channelId, slackClient: client }).catch(err => {
+        console.error(`[slack-bot] suggestSchedule error for ${contentId}:`, err)
       })
     } catch (err) {
       console.error('[slack-bot] Approve error:', err)
@@ -176,6 +176,23 @@ export function createSlackApp() {
         })
       }
     }
+  })
+
+  // ── Confirm schedule button ────────────────────────────────
+  app.action('confirm_schedule', async ({ action, ack, body, client }) => {
+    await ack()
+
+    // value is encoded as "contentId|isoDate"
+    const [contentId, isoDate] = action.value.split('|')
+    const scheduledAt = new Date(isoDate)
+    const channelId   = body.container?.channel_id
+    const messageTs   = body.container?.message_ts
+
+    console.log(`[slack-bot] Schedule confirmed: ${contentId} for ${isoDate}`)
+
+    executeSchedule({ contentId, scheduledAt, channelId, messageTs, slackClient: client }).catch(err => {
+      console.error(`[slack-bot] executeSchedule error for ${contentId}:`, err)
+    })
   })
 
   return { app, start: (port) => app.start(port) }

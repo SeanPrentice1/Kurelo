@@ -1,5 +1,6 @@
 import { promoteToAssetLibrary } from '../../tools/memory.js'
 import { schedulePost, uploadMediaFromUrl, buildPostText } from '../../tools/postfast.js'
+import { scheduleOptionsBlocks, scheduleConfirmedBlocks } from '../../tools/slack.js'
 import supabase from '../../tools/supabase.js'
 
 const PLATFORM_LABELS = {
@@ -12,20 +13,70 @@ const PLATFORM_LABELS = {
   google_ads: 'Google Ads',
 }
 
+// Prime posting times per platform (UTC hours)
+const PRIME_HOUR = {
+  instagram:  17,
+  tiktok:     17,
+  twitter:    14,
+  linkedin:   14,
+  reddit:     15,
+  meta_ads:   14,
+  google_ads: 14,
+}
+
 /**
- * Called after a content item is approved via Slack or web dashboard.
- *
- * APPROVAL GATE — non-negotiable:
- * Only content with status 'approved' (set by a confirmed Slack approval interaction)
- * is ever passed to PostFast. Pending or rejected content is never queued.
- *
- * IMAGE GATE — non-negotiable:
- * If the approved post includes a generated image, it must be included in the
- * scheduled post. If the image upload to PostFast fails, scheduling is halted
- * and the user is notified via Slack. The post is NEVER downgraded to text-only.
+ * Step 1 — Called immediately after content is approved.
+ * Calculates smart schedule options (avoids days already used by this
+ * platform/product), then posts a slot-picker to Slack.
+ * Does NOT call PostFast yet.
  */
-export async function scheduleApprovedContent({ contentId, channelId, slackClient }) {
-  console.log(`[scheduler-agent] Processing approval: ${contentId}`)
+export async function suggestSchedule({ contentId, channelId, slackClient }) {
+  console.log(`[scheduler-agent] Suggesting schedule for: ${contentId}`)
+
+  const { data: item, error } = await supabase
+    .from('content_log')
+    .select('id, platform, product, metadata, status')
+    .eq('id', contentId)
+    .single()
+
+  if (error || !item) {
+    console.error(`[scheduler-agent] Content ${contentId} not found`)
+    return
+  }
+
+  if (item.status !== 'approved') return
+
+  const options = await buildScheduleOptions(item.platform, item.product)
+
+  if (!slackClient || !channelId) {
+    console.warn('[scheduler-agent] No Slack client — skipping schedule suggestion')
+    return
+  }
+
+  await slackClient.chat.postMessage({
+    channel: channelId,
+    text:    `📅 When should this ${PLATFORM_LABELS[item.platform] ?? item.platform} post go out?`,
+    blocks:  scheduleOptionsBlocks({
+      contentId: item.id,
+      platform:  item.platform,
+      product:   item.product,
+      options,
+    }),
+  })
+}
+
+/**
+ * Step 2 — Called when the user clicks a schedule option button.
+ * Uploads image (if any), commits to PostFast, updates DB, confirms in Slack.
+ *
+ * @param {string} contentId
+ * @param {Date}   scheduledAt  - The chosen slot
+ * @param {string} channelId
+ * @param {string} messageTs    - ts of the slot-picker message (to replace it)
+ * @param {object} slackClient
+ */
+export async function executeSchedule({ contentId, scheduledAt, channelId, messageTs, slackClient }) {
+  console.log(`[scheduler-agent] Executing schedule for ${contentId} at ${scheduledAt.toISOString()}`)
 
   const { data: item, error } = await supabase
     .from('content_log')
@@ -34,50 +85,50 @@ export async function scheduleApprovedContent({ contentId, channelId, slackClien
     .single()
 
   if (error || !item) throw new Error(`Content ${contentId} not found`)
-
-  // Hard gate: only process explicitly approved content
   if (item.status !== 'approved') {
-    console.warn(`[scheduler-agent] Skipping ${contentId} — status is '${item.status}', not 'approved'`)
-    return { status: 'skipped', reason: `status_${item.status}` }
+    console.warn(`[scheduler-agent] ${contentId} is no longer approved (status: ${item.status}) — skipping`)
+    return
   }
 
-  const platform     = item.platform
-  const imageUrl     = item.metadata?.image_url ?? null
+  const platform = item.platform
+  const imageUrl = item.metadata?.image_url ?? null
   let   postfastPostId = null
 
-  const scheduledAt = chooseScheduleTime(platform, item.product)
-
   if (platform && process.env.POSTFAST_API_KEY) {
-    // If this post has an image, upload it first — never schedule without it
+    // Image gate — must upload before scheduling; never post without it
     let mediaItems = []
     if (imageUrl) {
       try {
         const uploaded = await uploadMediaFromUrl(imageUrl, 0)
         mediaItems = [uploaded]
-        console.log(`[scheduler-agent] Image uploaded to PostFast: ${uploaded.key}`)
+        console.log(`[scheduler-agent] Image uploaded: ${uploaded.key}`)
       } catch (err) {
-        console.error(`[scheduler-agent] Image upload failed for ${contentId}: ${err.message}`)
-        await notifyImageUploadFailed({ item, err, channelId, slackClient })
+        console.error(`[scheduler-agent] Image upload failed: ${err.message}`)
+        await notifyFailed({
+          item, channelId, slackClient, messageTs,
+          reason: `The image failed to upload to PostFast.\n\n*Error:* ${err.message}\n\nPlease schedule it manually from the asset library.`,
+        })
         await supabase.from('content_log').update({ status: 'failed' }).eq('id', contentId)
-        return { status: 'failed', reason: 'image_upload_failed', error: err.message }
+        return
       }
     }
 
     try {
       const text   = buildPostText(item.output, item.metadata ?? {}, platform)
       const result = await schedulePost({ platform, content: text, scheduledAt, mediaItems })
-
       postfastPostId = result?.id ?? result?.posts?.[0]?.id ?? null
-      console.log(`[scheduler-agent] PostFast scheduled: ${postfastPostId} for ${platform}`)
+      console.log(`[scheduler-agent] PostFast scheduled: ${postfastPostId}`)
     } catch (err) {
-      console.error(`[scheduler-agent] PostFast scheduling failed for ${contentId}: ${err.message}`)
-      await notifySchedulingFailed({ item, err, channelId, slackClient })
+      console.error(`[scheduler-agent] PostFast error: ${err.message}`)
+      await notifyFailed({
+        item, channelId, slackClient, messageTs,
+        reason: `PostFast returned an error.\n\n*Error:* ${err.message}`,
+      })
       await supabase.from('content_log').update({ status: 'failed' }).eq('id', contentId)
-      return { status: 'failed', reason: 'postfast_error', error: err.message }
+      return
     }
   }
 
-  // Update content_log with postfast_post_id + status
   await supabase
     .from('content_log')
     .update({
@@ -90,118 +141,92 @@ export async function scheduleApprovedContent({ contentId, channelId, slackClien
 
   await promoteToAssetLibrary(contentId)
 
-  // Confirm to the user that the post is queued
-  await notifyScheduled({ item, scheduledAt, hasImage: !!imageUrl, channelId, slackClient })
-
-  console.log(`[scheduler-agent] Content ${contentId} scheduled for ${scheduledAt.toISOString()}`)
-  return { status: 'scheduled', postfastPostId, scheduledAt }
-}
-
-// ── Slack notifications ──────────────────────────────────────────────────────
-
-async function notifyScheduled({ item, scheduledAt, hasImage, channelId, slackClient }) {
-  if (!slackClient || !channelId) return
-  try {
-    const platformLabel = PLATFORM_LABELS[item.platform?.toLowerCase()] ?? item.platform ?? 'social'
-    const dateStr = scheduledAt.toLocaleDateString('en-GB', {
-      day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
-    })
-    const timeStr = scheduledAt.toLocaleTimeString('en-GB', {
-      hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false,
-    })
-    const imageNote = hasImage ? ' with image' : ''
-
-    await slackClient.chat.postMessage({
-      channel: channelId,
-      text:    `✅ ${platformLabel} post scheduled for ${dateStr} at ${timeStr} UTC`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `✅ *${platformLabel} post scheduled${imageNote}*\n\n📅 Going out on *${dateStr}* at *${timeStr} UTC*`,
-          },
-        },
-        {
-          type: 'context',
-          elements: [{ type: 'mrkdwn', text: `_You can view or edit this post in PostFast before it publishes._` }],
-        },
-      ],
-    })
-  } catch (slackErr) {
-    console.error(`[scheduler-agent] Failed to send scheduled notification: ${slackErr.message}`)
-  }
-}
-
-async function notifyImageUploadFailed({ item, err, channelId, slackClient }) {
-  if (!slackClient || !channelId) return
-  try {
-    await slackClient.chat.postMessage({
-      channel: channelId,
-      text:    `⚠️ Unable to schedule approved post — image upload to PostFast failed.`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `⚠️ *Unable to schedule post*\n\nThe approved ${item.platform} post could not be scheduled because the image failed to upload to PostFast.\n\n*Reason:* ${err.message}\n\nThe post has been marked as failed. You can find the approved content and generated image in the asset library. Please schedule it manually or contact support if this persists.`,
-          },
-        },
-        {
-          type: 'context',
-          elements: [{ type: 'mrkdwn', text: `Content ID: \`${item.id}\` — Platform: ${item.platform}` }],
-        },
-      ],
-    })
-  } catch (slackErr) {
-    console.error(`[scheduler-agent] Failed to send Slack notification: ${slackErr.message}`)
-  }
-}
-
-async function notifySchedulingFailed({ item, err, channelId, slackClient }) {
-  if (!slackClient || !channelId) return
-  try {
-    await slackClient.chat.postMessage({
-      channel: channelId,
-      text:    `⚠️ Unable to schedule approved post — PostFast returned an error.`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `⚠️ *Unable to schedule post*\n\nThe approved ${item.platform} post could not be queued in PostFast.\n\n*Reason:* ${err.message}\n\nThe post has been marked as failed. Please check your PostFast account and retry manually if needed.`,
-          },
-        },
-        {
-          type: 'context',
-          elements: [{ type: 'mrkdwn', text: `Content ID: \`${item.id}\` — Platform: ${item.platform}` }],
-        },
-      ],
-    })
-  } catch (slackErr) {
-    console.error(`[scheduler-agent] Failed to send Slack notification: ${slackErr.message}`)
-  }
-}
-
-// ── Schedule time ────────────────────────────────────────────────────────────
-
-function chooseScheduleTime(platform, product) {
-  const now    = new Date()
-  const target = new Date(now)
-  target.setUTCHours(target.getUTCHours() + 24)
-
-  if (product === 'rostura') {
-    target.setUTCHours(8, 0, 0, 0)
-  } else {
-    switch (platform?.toLowerCase()) {
-      case 'instagram':
-      case 'tiktok':
-        target.setUTCHours(17, 0, 0, 0)
-        break
-      default:
-        target.setUTCHours(14, 0, 0, 0)
+  // Replace the slot-picker message with confirmation
+  if (slackClient && channelId && messageTs) {
+    try {
+      await slackClient.chat.update({
+        channel: channelId,
+        ts:      messageTs,
+        text:    `✅ ${PLATFORM_LABELS[platform] ?? platform} post scheduled`,
+        blocks:  scheduleConfirmedBlocks({ platform, scheduledAt, hasImage: !!imageUrl }),
+      })
+    } catch (err) {
+      console.error(`[scheduler-agent] Failed to update Slack message: ${err.message}`)
     }
   }
 
-  return target
+  console.log(`[scheduler-agent] ${contentId} scheduled for ${scheduledAt.toISOString()}`)
+}
+
+// ── Smart slot calculation ───────────────────────────────────────────────────
+
+/**
+ * Returns 3 Date options, starting from tomorrow, skipping days that
+ * already have a scheduled post for the same platform.
+ */
+async function buildScheduleOptions(platform, product) {
+  const primeHour = PRIME_HOUR[platform?.toLowerCase()] ?? 14
+
+  // Fetch already-scheduled dates for this platform in the next 30 days
+  const windowEnd = new Date()
+  windowEnd.setDate(windowEnd.getDate() + 30)
+
+  const { data: existing } = await supabase
+    .from('content_log')
+    .select('scheduled_for')
+    .eq('platform', platform)
+    .eq('product', product)
+    .in('status', ['scheduled', 'approved'])
+    .gte('scheduled_for', new Date().toISOString())
+    .lte('scheduled_for', windowEnd.toISOString())
+
+  // Build a set of already-used UTC date strings (YYYY-MM-DD)
+  const usedDays = new Set(
+    (existing ?? [])
+      .map(r => r.scheduled_for)
+      .filter(Boolean)
+      .map(iso => iso.substring(0, 10))
+  )
+
+  // Walk forward from tomorrow, collecting 3 free days
+  const options = []
+  const cursor  = new Date()
+  cursor.setUTCDate(cursor.getUTCDate() + 1)
+  cursor.setUTCHours(primeHour, 0, 0, 0)
+
+  while (options.length < 3) {
+    const dayKey = cursor.toISOString().substring(0, 10)
+    if (!usedDays.has(dayKey)) {
+      options.push(new Date(cursor))
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+
+  return options
+}
+
+// ── Failure notification ─────────────────────────────────────────────────────
+
+async function notifyFailed({ item, channelId, slackClient, messageTs, reason }) {
+  if (!slackClient || !channelId) return
+  const platLabel = PLATFORM_LABELS[item.platform] ?? item.platform ?? 'post'
+  const blocks = [
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `⚠️ *Unable to schedule ${platLabel} post*\n\n${reason}` },
+    },
+    {
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: `Content ID: \`${item.id}\`` }],
+    },
+  ]
+  try {
+    if (messageTs) {
+      await slackClient.chat.update({ channel: channelId, ts: messageTs, text: `⚠️ Scheduling failed`, blocks })
+    } else {
+      await slackClient.chat.postMessage({ channel: channelId, text: `⚠️ Scheduling failed`, blocks })
+    }
+  } catch (err) {
+    console.error(`[scheduler-agent] Failed to send failure notification: ${err.message}`)
+  }
 }
