@@ -262,11 +262,12 @@ export function scheduleOptionsBlocks({ contentId, platform, product, options })
     return `${day} · ${time} UTC`
   }
 
-  const makeButton = (date, label, style) => ({
+  // action_id must be unique within a message — append index to each button
+  const makeButton = (date, label, index, style) => ({
     type:      'button',
     text:      { type: 'plain_text', text: label, emoji: true },
     ...(style ? { style } : {}),
-    action_id: 'confirm_schedule',
+    action_id: `confirm_schedule_${index}`,
     value:     `${contentId}|${date.toISOString()}`,
   })
 
@@ -285,9 +286,9 @@ export function scheduleOptionsBlocks({ contentId, platform, product, options })
     {
       type: 'actions',
       elements: [
-        makeButton(options[0], '✅ Confirm suggested', 'primary'),
-        ...(options[1] ? [makeButton(options[1], `📅 ${formatOption(options[1])}`)] : []),
-        ...(options[2] ? [makeButton(options[2], `📅 ${formatOption(options[2])}`)] : []),
+        makeButton(options[0], '✅ Confirm suggested', 0, 'primary'),
+        ...(options[1] ? [makeButton(options[1], `📅 ${formatOption(options[1])}`, 1)] : []),
+        ...(options[2] ? [makeButton(options[2], `📅 ${formatOption(options[2])}`, 2)] : []),
       ],
     },
     {
