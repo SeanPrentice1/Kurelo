@@ -109,8 +109,8 @@ export function createSlackApp() {
         })
       }
 
-      // Promote to asset library (async — don't block the Slack response)
-      scheduleApprovedContent({ contentId }).catch(err => {
+      // Schedule + promote (async — don't block the Slack response)
+      scheduleApprovedContent({ contentId, channelId, slackClient: client }).catch(err => {
         console.error(`[slack-bot] Post-approval processing error for ${contentId}:`, err)
       })
     } catch (err) {
