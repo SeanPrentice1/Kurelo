@@ -104,7 +104,8 @@ async function zernioSchedule(item) {
   if (!postRes.ok) throw new Error(`Zernio schedule failed: ${postRes.status} ${await postRes.text()}`)
 
   const data = await postRes.json()
-  return data?.id ?? data?.posts?.[0]?.id ?? data?.data?.id ?? null
+  console.log('[approve] zernio schedulePost response:', JSON.stringify(data).substring(0, 300))
+  return data?._id ?? data?.id ?? data?.posts?.[0]?._id ?? data?.posts?.[0]?.id ?? data?.data?._id ?? data?.data?.id ?? null
 }
 
 function buildPostText(output, metadata, platform) {

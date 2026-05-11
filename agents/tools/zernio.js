@@ -83,7 +83,9 @@ export async function schedulePost({ platform, content, scheduledAt, imageUrl })
   })
 
   if (!res.ok) throw new Error(`Zernio schedulePost failed: ${res.status} ${await res.text()}`)
-  return res.json()
+  const data = await res.json()
+  console.log('[zernio] schedulePost response:', JSON.stringify(data).substring(0, 300))
+  return data
 }
 
 // ── Analytics ────────────────────────────────────────────────────────────────
