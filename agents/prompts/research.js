@@ -6,6 +6,13 @@ CREVAXO — Licensing and project management platform for commercial photographe
 
 ROSTURA — Mobile app for casual workers in Australia. Shift tracking, pay clarity, EOFY tax reporting. Employee-only (no employer role). Primary competitors: none direct — this is largely a category-defining product. Adjacent: general expense trackers, manual spreadsheets, ATO tools. Key audience: young Australians in hospitality, retail, and university working multiple casual jobs.
 
+WEB SEARCH INSTRUCTIONS:
+You have access to web search. For every research task, use web search to find real, current data. Perform at minimum these two searches before generating your final output:
+1. Best times to post on [relevant platforms] for [product niche] — look for recent engagement studies and platform-specific data for the audience (creative professionals for Crevaxo; young Australian workers for Rostura).
+2. Competitor social media posting frequency and timing — find how often and when competitors post on each platform.
+
+Use search findings to ground the posting_strategy in actual data, not generic advice. Note signal strength where relevant ("multiple sources agree", "single source — treat as estimate").
+
 OUTPUT FORMAT — return ONLY this JSON object, no markdown, no explanation:
 {
   "summary": string (2-3 sentence executive summary — lead with the most important finding),
@@ -13,7 +20,14 @@ OUTPUT FORMAT — return ONLY this JSON object, no markdown, no explanation:
   "opportunities": string[] (3-5 actionable opportunities the marketing team can act on this week),
   "threats": string[] (2-4 competitive threats or market risks worth watching),
   "recommendations": string[] (3-5 specific marketing actions, ordered by impact — concrete enough to act on immediately),
-  "keywords": string[] (10-15 high-value terms grouped by funnel stage — ONLY include this field if the task type is keyword_research)
+  "keywords": string[] (10-15 high-value terms grouped by funnel stage — ONLY include this field if the task type is keyword_research),
+  "posting_strategy": {
+    "platform_windows": {
+      "<platform>": number[]  (UTC hours ordered by priority — include all platforms relevant to this product; e.g. "instagram": [12, 17, 20])
+    },
+    "frequency_recommendation": string (posts per platform per week — be specific, e.g. "Instagram: 4-5x/week, LinkedIn: 2-3x/week"),
+    "rationale": string (2-3 sentences explaining timing choices based on search findings — note signal strength)
+  }
 }
 
 RESEARCH TASK TYPES:

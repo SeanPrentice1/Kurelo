@@ -87,6 +87,35 @@ export async function logDecision({ contentId, campaignId, decision, decidedBy, 
   if (error) throw new Error(`Decision log failed: ${error.message}`)
 }
 
+/**
+ * Persist a posting_strategy object against a campaign record.
+ * Only writes if the strategy has platform_windows data.
+ * Silently no-ops if campaignId is falsy.
+ */
+export async function savePostingStrategy(campaignId, postingStrategy) {
+  if (!campaignId || !postingStrategy?.platform_windows) return
+  const { error } = await supabase
+    .from('campaign_log')
+    .update({ posting_strategy: postingStrategy })
+    .eq('id', campaignId)
+  if (error) console.error(`[memory] savePostingStrategy failed for campaign ${campaignId}: ${error.message}`)
+}
+
+/**
+ * Retrieve the posting_strategy stored against a campaign.
+ * Returns null if the campaign doesn't exist or has no strategy.
+ */
+export async function getCampaignPostingStrategy(campaignId) {
+  if (!campaignId) return null
+  const { data, error } = await supabase
+    .from('campaign_log')
+    .select('posting_strategy')
+    .eq('id', campaignId)
+    .single()
+  if (error) return null
+  return data?.posting_strategy ?? null
+}
+
 export async function promoteToAssetLibrary(contentId) {
   const { data: item, error } = await supabase
     .from('content_log')

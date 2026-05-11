@@ -1,4 +1,4 @@
-import { promoteToAssetLibrary } from '../../tools/memory.js'
+import { promoteToAssetLibrary, getCampaignPostingStrategy } from '../../tools/memory.js'
 import { schedulePost, buildPostText } from '../../tools/zernio.js'
 import { scheduleOptionsBlocks, scheduleConfirmedBlocks } from '../../tools/slack.js'
 import supabase from '../../tools/supabase.js'
@@ -13,7 +13,8 @@ const PLATFORM_LABELS = {
   google_ads: 'Google Ads',
 }
 
-// Prime posting times per platform (UTC hours)
+// Fallback prime posting times per platform (UTC hours) — used when no campaign
+// posting_strategy has been persisted by the research agent.
 const PRIME_HOUR = {
   instagram:  17,
   tiktok:     17,
@@ -26,8 +27,9 @@ const PRIME_HOUR = {
 
 /**
  * Step 1 — Called immediately after content is approved.
- * Calculates smart schedule options (avoids days already used by this
- * platform/product), then posts a slot-picker to Slack.
+ * Fetches the campaign's research-backed posting_strategy, calculates smart
+ * schedule options using strategy time windows (avoids days already used by
+ * this platform/product), then posts a slot-picker to Slack.
  * Does NOT call Zernio yet.
  */
 export async function suggestSchedule({ contentId, channelId, slackClient }) {
@@ -35,7 +37,7 @@ export async function suggestSchedule({ contentId, channelId, slackClient }) {
 
   const { data: item, error } = await supabase
     .from('content_log')
-    .select('id, platform, product, metadata, status')
+    .select('id, platform, product, campaign_id, metadata, status')
     .eq('id', contentId)
     .single()
 
@@ -46,7 +48,15 @@ export async function suggestSchedule({ contentId, channelId, slackClient }) {
 
   if (item.status !== 'approved') return
 
-  const options = await buildScheduleOptions(item.platform, item.product)
+  // Load campaign posting_strategy (may be null for campaigns without research tasks)
+  const postingStrategy = await getCampaignPostingStrategy(item.campaign_id)
+  if (postingStrategy) {
+    console.log(`[scheduler-agent] Using campaign posting strategy for ${item.platform}`)
+  } else {
+    console.log(`[scheduler-agent] No campaign posting strategy — using fallback hours for ${item.platform}`)
+  }
+
+  const options = await buildScheduleOptions(item.platform, item.product, postingStrategy)
 
   if (!slackClient || !channelId) {
     console.warn('[scheduler-agent] No Slack client — skipping schedule suggestion')
@@ -145,11 +155,19 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
 // ── Smart slot calculation ───────────────────────────────────────────────────
 
 /**
- * Returns 3 Date options, starting from tomorrow, skipping days that
- * already have a scheduled post for the same platform.
+ * Returns 3 Date options, starting from tomorrow, skipping days that already
+ * have a scheduled post for the same platform/product.
+ *
+ * Time-of-day is determined by the campaign's research-backed posting_strategy
+ * (platform_windows hours, cycled across the 3 slots). Falls back to
+ * PRIME_HOUR constants when no strategy is available.
  */
-async function buildScheduleOptions(platform, product) {
-  const primeHour = PRIME_HOUR[platform?.toLowerCase()] ?? 14
+async function buildScheduleOptions(platform, product, postingStrategy) {
+  const platformKey      = platform?.toLowerCase()
+  const strategyHours    = postingStrategy?.platform_windows?.[platformKey]
+  const preferredHours   = Array.isArray(strategyHours) && strategyHours.length > 0
+    ? strategyHours
+    : [PRIME_HOUR[platformKey] ?? 14]
 
   // Fetch already-scheduled dates for this platform in the next 30 days
   const windowEnd = new Date()
@@ -172,16 +190,21 @@ async function buildScheduleOptions(platform, product) {
       .map(iso => iso.substring(0, 10))
   )
 
-  // Walk forward from tomorrow, collecting 3 free days
+  // Walk forward from tomorrow, collecting 3 free days.
+  // Each slot uses a different preferred hour (cycling through the list).
   const options = []
   const cursor  = new Date()
   cursor.setUTCDate(cursor.getUTCDate() + 1)
-  cursor.setUTCHours(primeHour, 0, 0, 0)
+  cursor.setUTCMinutes(0, 0, 0)
 
   while (options.length < 3) {
     const dayKey = cursor.toISOString().substring(0, 10)
     if (!usedDays.has(dayKey)) {
-      options.push(new Date(cursor))
+      // Cycle through strategy hours so each option may fall at a different time
+      const hour = preferredHours[options.length % preferredHours.length]
+      const slot = new Date(cursor)
+      slot.setUTCHours(hour, 0, 0, 0)
+      options.push(slot)
     }
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
