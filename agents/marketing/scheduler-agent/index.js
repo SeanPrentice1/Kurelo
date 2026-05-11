@@ -100,7 +100,7 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
     try {
       const text   = buildPostText(item.output, item.metadata ?? {}, platform)
       const result = await schedulePost({ platform, content: text, scheduledAt, imageUrl: imageUrl ?? undefined })
-      zernioPostId = result?.id ?? result?.posts?.[0]?.id ?? result?.data?.id ?? null
+      zernioPostId = result?._id ?? result?.id ?? result?.posts?.[0]?._id ?? result?.posts?.[0]?.id ?? result?.data?._id ?? result?.data?.id ?? null
       console.log(`[scheduler-agent] Zernio scheduled: ${zernioPostId}`)
     } catch (err) {
       console.error(`[scheduler-agent] Zernio error: ${err.message}`)
