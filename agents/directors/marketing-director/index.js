@@ -5,6 +5,7 @@ import { runAdsAgent }       from '../../marketing/ads-agent/index.js'
 import { runResearchAgent }  from '../../marketing/research-agent/index.js'
 import { runAnalyticsAgent } from '../../marketing/analytics-agent/index.js'
 import { runDesignerAgent }  from '../../marketing/designer-agent/index.js'
+import { savePostingStrategy } from '../../tools/memory.js'
 
 const AGENT_RUNNERS = {
   content:   runContentAgent,
@@ -31,7 +32,7 @@ export async function runMarketingDirector({ brief, memoryText, campaignId, camp
   console.log(`[marketing-director] Plan: ${campaignName} (${plan.tasks.length} tasks)`)
 
   // 2. Execute tasks in dependency order — all internal (no Slack posting)
-  const { pendingItems, researchSummary, analyticsSummary, flags } = await executeTasks({
+  const { pendingItems, researchSummary, analyticsSummary, postingStrategy, flags } = await executeTasks({
     tasks: plan.tasks,
     product,
     campaignId,
@@ -42,13 +43,14 @@ export async function runMarketingDirector({ brief, memoryText, campaignId, camp
 
   return {
     campaignName,
-    summary:          plan.summary,
-    assumptions:      plan.assumptions ?? [],
+    summary:           plan.summary,
+    assumptions:       plan.assumptions ?? [],
     estimatedTimeline: plan.estimated_timeline,
-    tasks:            plan.tasks,
+    tasks:             plan.tasks,
     pendingItems,
     researchSummary,
     analyticsSummary,
+    postingStrategy,
     flags,
   }
 }
@@ -88,12 +90,13 @@ async function executeTasks({ tasks, product, campaignId, campaignName, channelI
     .filter(t => t.agent !== 'scheduler' && t.agent !== 'designer')
     .map(t => ({ ...t, product: t.product ?? product }))
 
-  const outputs         = new Map()
-  const pending         = []
-  const flags           = []
-  let   researchSummary = null
+  const outputs          = new Map()
+  const pending          = []
+  const flags            = []
+  let   researchSummary  = null
   let   analyticsSummary = null
-  const remaining       = [...workTasks]
+  let   postingStrategy  = null
+  const remaining        = [...workTasks]
 
   while (remaining.length > 0) {
     const ready = remaining.filter(t =>
@@ -115,7 +118,17 @@ async function executeTasks({ tasks, product, campaignId, campaignName, channelI
         const { item, designerResult } = result.value
         outputs.set(ready[i].id, item)
 
-        if (item.agent === 'research')  researchSummary  = extractBullets(item.output)
+        if (item.agent === 'research') {
+          researchSummary = extractBullets(item.output)
+          // Capture and persist posting_strategy from the first research task that returns one
+          if (!postingStrategy && item.posting_strategy?.platform_windows) {
+            postingStrategy = item.posting_strategy
+            savePostingStrategy(campaignId, postingStrategy).catch(err =>
+              console.error('[marketing-director] Failed to save posting_strategy:', err.message)
+            )
+            console.log(`[marketing-director] Posting strategy saved for campaign ${campaignId} — platforms: ${Object.keys(postingStrategy.platform_windows).join(', ')}`)
+          }
+        }
         if (item.agent === 'analytics') analyticsSummary = extractBullets(item.output)
 
         // Only content/ads items surface for Slack approval
@@ -130,7 +143,7 @@ async function executeTasks({ tasks, product, campaignId, campaignName, channelI
     }
   }
 
-  return { pendingItems: pending, researchSummary, analyticsSummary, flags }
+  return { pendingItems: pending, researchSummary, analyticsSummary, postingStrategy, flags }
 }
 
 async function runTask({ task, campaignId, campaignName, channelId, slackClient, outputs }) {
