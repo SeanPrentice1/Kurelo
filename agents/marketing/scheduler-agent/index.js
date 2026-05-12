@@ -27,10 +27,18 @@ const PRIME_HOUR = {
 
 /**
  * Step 1 — Called immediately after content is approved.
+ *
  * Fetches the campaign's research-backed posting_strategy, calculates smart
- * schedule options using strategy time windows (avoids days already used by
- * this platform/product), then posts a slot-picker to Slack.
- * Does NOT call Zernio yet.
+ * schedule options that:
+ *   - Use strategy time windows from the research agent (falls back to
+ *     PRIME_HOUR constants if no strategy is available)
+ *   - Avoid calendar days already taken by other posts for the same
+ *     platform/product
+ *   - Immediately write a provisional scheduled_for so subsequent
+ *     suggestSchedule calls (e.g. for a 5-post campaign approved at once)
+ *     don't collide on the same date
+ *
+ * Does NOT call Zernio yet — that only happens in executeSchedule.
  */
 export async function suggestSchedule({ contentId, channelId, slackClient }) {
   console.log(`[scheduler-agent] Suggesting schedule for: ${contentId}`)
@@ -48,15 +56,30 @@ export async function suggestSchedule({ contentId, channelId, slackClient }) {
 
   if (item.status !== 'approved') return
 
-  // Load campaign posting_strategy (may be null for campaigns without research tasks)
+  // Load campaign posting_strategy (null if migration not run or no research task)
   const postingStrategy = await getCampaignPostingStrategy(item.campaign_id)
-  if (postingStrategy) {
-    console.log(`[scheduler-agent] Using campaign posting strategy for ${item.platform}`)
+
+  if (postingStrategy?.platform_windows) {
+    const platforms = Object.keys(postingStrategy.platform_windows)
+    console.log(`[scheduler-agent] Using research-backed posting strategy — platforms: ${platforms.join(', ')}`)
   } else {
-    console.log(`[scheduler-agent] No campaign posting strategy — using fallback hours for ${item.platform}`)
+    console.log(`[scheduler-agent] No posting strategy found for campaign ${item.campaign_id} — using fallback hours`)
   }
 
   const options = await buildScheduleOptions(item.platform, item.product, postingStrategy)
+
+  // ── Provisional reservation ───────────────────────────────────────────────
+  // Write the first option back to content_log immediately so that other
+  // suggestSchedule calls in the same campaign (e.g. 5-post batch) see this
+  // date as taken and pick different days. executeSchedule will overwrite
+  // this with the user's actual choice.
+  if (options.length > 0) {
+    await supabase
+      .from('content_log')
+      .update({ scheduled_for: options[0].toISOString() })
+      .eq('id', contentId)
+      .eq('status', 'approved') // guard: only update if still in approved state
+  }
 
   if (!slackClient || !channelId) {
     console.warn('[scheduler-agent] No Slack client — skipping schedule suggestion')
@@ -77,7 +100,9 @@ export async function suggestSchedule({ contentId, channelId, slackClient }) {
 
 /**
  * Step 2 — Called when the user clicks a schedule option button.
- * Uploads image (if any), commits to Zernio, updates DB, confirms in Slack.
+ * Commits the chosen slot to Zernio, updates DB, confirms in Slack.
+ * executeSchedule is intentionally NOT changed — the user's explicit
+ * choice always wins regardless of the provisional reservation.
  *
  * @param {string} contentId
  * @param {Date}   scheduledAt  - The chosen slot
@@ -105,8 +130,6 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
   let   zernioPostId = null
 
   if (platform && process.env.ZERNIO_API_KEY) {
-    // Image gate — imageUrl is passed directly to Zernio (no upload step needed).
-    // If the post has an image and Zernio rejects it, we halt rather than post without it.
     try {
       const text   = buildPostText(item.output, item.metadata ?? {}, platform)
       const result = await schedulePost({ platform, content: text, scheduledAt, imageUrl: imageUrl ?? undefined })
@@ -126,16 +149,15 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
   await supabase
     .from('content_log')
     .update({
-      status:        'scheduled',
+      status:         'scheduled',
       zernio_post_id: zernioPostId,
-      scheduled_for: scheduledAt.toISOString(),
-      metadata:      { ...(item.metadata ?? {}), zernio_id: zernioPostId },
+      scheduled_for:  scheduledAt.toISOString(),
+      metadata:       { ...(item.metadata ?? {}), zernio_id: zernioPostId },
     })
     .eq('id', contentId)
 
   await promoteToAssetLibrary(contentId)
 
-  // Replace the slot-picker message with confirmation
   if (slackClient && channelId && messageTs) {
     try {
       await slackClient.chat.update({
@@ -156,20 +178,29 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
 
 /**
  * Returns 3 Date options, starting from tomorrow, skipping days that already
- * have a scheduled post for the same platform/product.
+ * have a scheduled (or provisionally reserved) post for the same
+ * platform/product.
  *
- * Time-of-day is determined by the campaign's research-backed posting_strategy
- * (platform_windows hours, cycled across the 3 slots). Falls back to
- * PRIME_HOUR constants when no strategy is available.
+ * Time-of-day is driven by the campaign's research-backed posting_strategy:
+ *   - platform_windows[platform] provides UTC hours in priority order
+ *   - Each of the 3 options cycles through those hours so they differ
+ *   - Falls back to PRIME_HOUR constants when no strategy is present
+ *
+ * @param {string}      platform
+ * @param {string}      product
+ * @param {object|null} postingStrategy  - from campaign_log.posting_strategy
  */
 async function buildScheduleOptions(platform, product, postingStrategy) {
-  const platformKey      = platform?.toLowerCase()
-  const strategyHours    = postingStrategy?.platform_windows?.[platformKey]
-  const preferredHours   = Array.isArray(strategyHours) && strategyHours.length > 0
+  const platformKey    = platform?.toLowerCase()
+  const strategyHours  = postingStrategy?.platform_windows?.[platformKey]
+  const preferredHours = Array.isArray(strategyHours) && strategyHours.length > 0
     ? strategyHours
     : [PRIME_HOUR[platformKey] ?? 14]
 
-  // Fetch already-scheduled dates for this platform in the next 30 days
+  console.log(`[scheduler-agent] Preferred hours for ${platform}: ${preferredHours.join(', ')} UTC (${postingStrategy ? 'strategy' : 'fallback'})`)
+
+  // Query approved+pending items with scheduled_for set (includes provisional
+  // reservations written by earlier suggestSchedule calls in the same campaign)
   const windowEnd = new Date()
   windowEnd.setDate(windowEnd.getDate() + 30)
 
@@ -178,7 +209,8 @@ async function buildScheduleOptions(platform, product, postingStrategy) {
     .select('scheduled_for')
     .eq('platform', platform)
     .eq('product', product)
-    .in('status', ['scheduled', 'approved'])
+    .in('status', ['scheduled', 'approved', 'pending'])
+    .not('scheduled_for', 'is', null)
     .gte('scheduled_for', new Date().toISOString())
     .lte('scheduled_for', windowEnd.toISOString())
 
@@ -190,8 +222,10 @@ async function buildScheduleOptions(platform, product, postingStrategy) {
       .map(iso => iso.substring(0, 10))
   )
 
+  console.log(`[scheduler-agent] Days already taken for ${platform}: ${[...usedDays].join(', ') || 'none'}`)
+
   // Walk forward from tomorrow, collecting 3 free days.
-  // Each slot uses a different preferred hour (cycling through the list).
+  // Each slot cycles through preferredHours so options fall at different times.
   const options = []
   const cursor  = new Date()
   cursor.setUTCDate(cursor.getUTCDate() + 1)
@@ -200,7 +234,6 @@ async function buildScheduleOptions(platform, product, postingStrategy) {
   while (options.length < 3) {
     const dayKey = cursor.toISOString().substring(0, 10)
     if (!usedDays.has(dayKey)) {
-      // Cycle through strategy hours so each option may fall at a different time
       const hour = preferredHours[options.length % preferredHours.length]
       const slot = new Date(cursor)
       slot.setUTCHours(hour, 0, 0, 0)
@@ -209,6 +242,7 @@ async function buildScheduleOptions(platform, product, postingStrategy) {
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
 
+  console.log(`[scheduler-agent] Generated options: ${options.map(d => d.toISOString()).join(' | ')}`)
   return options
 }
 
