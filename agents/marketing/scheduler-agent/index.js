@@ -13,9 +13,9 @@ const PLATFORM_LABELS = {
   google_ads: 'Google Ads',
 }
 
-// Fallback prime posting times per platform (UTC hours) — used when no campaign
-// posting_strategy has been persisted by the research agent.
-const PRIME_HOUR = {
+// Fallback prime posting times per platform (UTC hours) used ONLY when no
+// campaign posting_strategy exists (i.e. the campaign had no research task).
+const FALLBACK_HOUR = {
   instagram:  17,
   tiktok:     17,
   twitter:    14,
@@ -25,20 +25,26 @@ const PRIME_HOUR = {
   google_ads: 14,
 }
 
+const DAY_OF_WEEK = {
+  sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+  thursday: 4, friday: 5, saturday: 6,
+}
+
 /**
  * Step 1 — Called immediately after content is approved.
  *
- * Fetches the campaign's research-backed posting_strategy, calculates smart
- * schedule options that:
- *   - Use strategy time windows from the research agent (falls back to
- *     PRIME_HOUR constants if no strategy is available)
- *   - Avoid calendar days already taken by other posts for the same
- *     platform/product
- *   - Immediately write a provisional scheduled_for so subsequent
- *     suggestSchedule calls (e.g. for a 5-post campaign approved at once)
- *     don't collide on the same date
+ * Fetches the campaign's research-backed posting_strategy. The strategy
+ * contains an ordered list of recommended {day, utc_hour} slots per platform.
+ * The scheduler works through those slots in priority order, skipping any
+ * exact day+time combos already taken by another post.
  *
- * Does NOT call Zernio yet — that only happens in executeSchedule.
+ * Two posts on the same day at different hours are explicitly valid — the
+ * research agent may recommend e.g. Tuesday 12:00 and Tuesday 17:00 as
+ * independent high-engagement windows.
+ *
+ * A provisional scheduled_for is written back to content_log immediately
+ * so that concurrent suggestSchedule calls for a multi-post campaign each
+ * see the previous reservations and receive distinct slots.
  */
 export async function suggestSchedule({ contentId, channelId, slackClient }) {
   console.log(`[scheduler-agent] Suggesting schedule for: ${contentId}`)
@@ -56,29 +62,25 @@ export async function suggestSchedule({ contentId, channelId, slackClient }) {
 
   if (item.status !== 'approved') return
 
-  // Load campaign posting_strategy (null if migration not run or no research task)
   const postingStrategy = await getCampaignPostingStrategy(item.campaign_id)
 
-  if (postingStrategy?.platform_windows) {
-    const platforms = Object.keys(postingStrategy.platform_windows)
-    console.log(`[scheduler-agent] Using research-backed posting strategy — platforms: ${platforms.join(', ')}`)
+  if (postingStrategy?.platform_windows?.[item.platform?.toLowerCase()]) {
+    console.log(`[scheduler-agent] Using research-backed posting strategy for ${item.platform}`)
   } else {
-    console.log(`[scheduler-agent] No posting strategy found for campaign ${item.campaign_id} — using fallback hours`)
+    console.log(`[scheduler-agent] No strategy for ${item.platform} in campaign ${item.campaign_id} — using fallback`)
   }
 
   const options = await buildScheduleOptions(item.platform, item.product, postingStrategy)
 
-  // ── Provisional reservation ───────────────────────────────────────────────
-  // Write the first option back to content_log immediately so that other
-  // suggestSchedule calls in the same campaign (e.g. 5-post batch) see this
-  // date as taken and pick different days. executeSchedule will overwrite
-  // this with the user's actual choice.
+  // Provisional reservation — write the first suggested slot back to content_log
+  // so that other suggestSchedule calls in this campaign see it as taken.
+  // executeSchedule will overwrite this with the user's confirmed choice.
   if (options.length > 0) {
     await supabase
       .from('content_log')
       .update({ scheduled_for: options[0].toISOString() })
       .eq('id', contentId)
-      .eq('status', 'approved') // guard: only update if still in approved state
+      .eq('status', 'approved')
   }
 
   if (!slackClient || !channelId) {
@@ -100,15 +102,8 @@ export async function suggestSchedule({ contentId, channelId, slackClient }) {
 
 /**
  * Step 2 — Called when the user clicks a schedule option button.
- * Commits the chosen slot to Zernio, updates DB, confirms in Slack.
- * executeSchedule is intentionally NOT changed — the user's explicit
- * choice always wins regardless of the provisional reservation.
- *
- * @param {string} contentId
- * @param {Date}   scheduledAt  - The chosen slot
- * @param {string} channelId
- * @param {string} messageTs    - ts of the slot-picker message (to replace it)
- * @param {object} slackClient
+ * Commits the chosen slot to Zernio, updates the DB, confirms in Slack.
+ * Not modified — the user's explicit choice always wins.
  */
 export async function executeSchedule({ contentId, scheduledAt, channelId, messageTs, slackClient }) {
   console.log(`[scheduler-agent] Executing schedule for ${contentId} at ${scheduledAt.toISOString()}`)
@@ -174,35 +169,35 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
   console.log(`[scheduler-agent] ${contentId} scheduled for ${scheduledAt.toISOString()}`)
 }
 
-// ── Smart slot calculation ───────────────────────────────────────────────────
+// ── Slot calculation ─────────────────────────────────────────────────────────
 
 /**
- * Returns 3 Date options, starting from tomorrow, skipping days that already
- * have a scheduled (or provisionally reserved) post for the same
- * platform/product.
+ * Returns 3 Date options driven entirely by the research agent's posting_strategy.
  *
- * Time-of-day is driven by the campaign's research-backed posting_strategy:
- *   - platform_windows[platform] provides UTC hours in priority order
- *   - Each of the 3 options cycles through those hours so they differ
- *   - Falls back to PRIME_HOUR constants when no strategy is present
+ * The strategy supplies an ordered list of {day, utc_hour} slots per platform
+ * (e.g. [{day:'tuesday',utc_hour:17},{day:'tuesday',utc_hour:20},{day:'thursday',utc_hour:12}]).
+ * Starting from tomorrow, the scheduler walks forward day by day and checks
+ * each calendar day against the strategy's recommendations for that day-of-week.
+ * When a recommended slot is free it is offered; when it is taken (exact day+hour
+ * collision) it is skipped and the next recommended slot is tried instead.
  *
- * @param {string}      platform
- * @param {string}      product
- * @param {object|null} postingStrategy  - from campaign_log.posting_strategy
+ * Two posts on the same day at different hours are explicitly valid — the
+ * research agent decides whether that is appropriate for the audience.
+ *
+ * Falls back to a simple day-walk at the platform's prime hour when no
+ * strategy is present (campaigns without a research task).
  */
 async function buildScheduleOptions(platform, product, postingStrategy) {
-  const platformKey    = platform?.toLowerCase()
-  const strategyHours  = postingStrategy?.platform_windows?.[platformKey]
-  const preferredHours = Array.isArray(strategyHours) && strategyHours.length > 0
-    ? strategyHours
-    : [PRIME_HOUR[platformKey] ?? 14]
+  const platformKey  = platform?.toLowerCase()
+  const rawSlots     = postingStrategy?.platform_windows?.[platformKey]
 
-  console.log(`[scheduler-agent] Preferred hours for ${platform}: ${preferredHours.join(', ')} UTC (${postingStrategy ? 'strategy' : 'fallback'})`)
+  // Parse strategy slots into [{dayOfWeek: 0-6, utc_hour: 0-23}] in priority order
+  const strategySlots = parseStrategySlots(rawSlots)
 
-  // Query approved+pending items with scheduled_for set (includes provisional
-  // reservations written by earlier suggestSchedule calls in the same campaign)
+  // Fetch all content for this platform/product that already has a scheduled_for
+  // (covers confirmed, provisionally reserved, and legacy approved rows)
   const windowEnd = new Date()
-  windowEnd.setDate(windowEnd.getDate() + 30)
+  windowEnd.setDate(windowEnd.getDate() + 90)
 
   const { data: existing } = await supabase
     .from('content_log')
@@ -214,36 +209,102 @@ async function buildScheduleOptions(platform, product, postingStrategy) {
     .gte('scheduled_for', new Date().toISOString())
     .lte('scheduled_for', windowEnd.toISOString())
 
-  // Build a set of already-used UTC date strings (YYYY-MM-DD)
-  const usedDays = new Set(
+  // Taken slots keyed as "YYYY-MM-DDTHH" (day+hour precision so two posts on
+  // the same day at different times don't conflict with each other)
+  const takenSlots = new Set(
     (existing ?? [])
       .map(r => r.scheduled_for)
       .filter(Boolean)
-      .map(iso => iso.substring(0, 10))
+      .map(isoToSlotKey)
   )
 
-  console.log(`[scheduler-agent] Days already taken for ${platform}: ${[...usedDays].join(', ') || 'none'}`)
+  if (strategySlots.length === 0) {
+    console.log(`[scheduler-agent] No strategy slots for ${platform} — using fallback hour`)
+    return buildFallbackOptions(platformKey, takenSlots)
+  }
 
-  // Walk forward from tomorrow, collecting 3 free days.
-  // Each slot cycles through preferredHours so options fall at different times.
+  console.log(`[scheduler-agent] Strategy has ${strategySlots.length} recommended slots for ${platform}`)
+  console.log(`[scheduler-agent] Already taken: ${[...takenSlots].join(', ') || 'none'}`)
+
+  // Walk forward day by day from tomorrow, checking strategy recommendations
   const options = []
   const cursor  = new Date()
   cursor.setUTCDate(cursor.getUTCDate() + 1)
-  cursor.setUTCMinutes(0, 0, 0)
+  cursor.setUTCHours(0, 0, 0, 0)
 
-  while (options.length < 3) {
-    const dayKey = cursor.toISOString().substring(0, 10)
-    if (!usedDays.has(dayKey)) {
-      const hour = preferredHours[options.length % preferredHours.length]
-      const slot = new Date(cursor)
-      slot.setUTCHours(hour, 0, 0, 0)
-      options.push(slot)
+  for (let day = 0; day < 90 && options.length < 3; day++) {
+    const curDayOfWeek = cursor.getUTCDay()
+    const dateStr      = cursor.toISOString().substring(0, 10)
+
+    // Collect all strategy-recommended slots for this day of week, in priority order
+    for (const slot of strategySlots) {
+      if (options.length >= 3) break
+      if (slot.dayOfWeek !== curDayOfWeek) continue
+
+      const slotKey = `${dateStr}T${String(slot.utc_hour).padStart(2, '0')}`
+      if (!takenSlots.has(slotKey)) {
+        const d = new Date(cursor)
+        d.setUTCHours(slot.utc_hour, 0, 0, 0)
+        options.push(d)
+        takenSlots.add(slotKey) // prevent offering the same slot twice within this call
+      }
     }
+
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
 
-  console.log(`[scheduler-agent] Generated options: ${options.map(d => d.toISOString()).join(' | ')}`)
+  console.log(`[scheduler-agent] Generated ${options.length} options: ${options.map(d => d.toISOString()).join(' | ')}`)
   return options
+}
+
+/**
+ * Parse whatever the research agent returned into a normalised slot list.
+ * Accepts the new {day, utc_hour} object format.
+ * Returns [] if input is missing, malformed, or in an unrecognised format.
+ */
+function parseStrategySlots(rawSlots) {
+  if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
+
+  const slots = []
+  for (const s of rawSlots) {
+    if (typeof s === 'object' && s !== null && typeof s.day === 'string' && typeof s.utc_hour === 'number') {
+      const dayOfWeek = DAY_OF_WEEK[s.day.toLowerCase()]
+      if (dayOfWeek !== undefined && s.utc_hour >= 0 && s.utc_hour <= 23) {
+        slots.push({ dayOfWeek, utc_hour: s.utc_hour })
+      }
+    }
+  }
+  return slots
+}
+
+/**
+ * Fallback when no strategy is available. Offers 3 upcoming days at the
+ * platform's prime hour, skipping exact day+hour collisions.
+ */
+function buildFallbackOptions(platformKey, takenSlots) {
+  const hour    = FALLBACK_HOUR[platformKey] ?? 14
+  const options = []
+  const cursor  = new Date()
+  cursor.setUTCDate(cursor.getUTCDate() + 1)
+
+  while (options.length < 3) {
+    const dateStr = cursor.toISOString().substring(0, 10)
+    const slotKey = `${dateStr}T${String(hour).padStart(2, '0')}`
+    if (!takenSlots.has(slotKey)) {
+      const d = new Date(cursor)
+      d.setUTCHours(hour, 0, 0, 0)
+      options.push(d)
+      takenSlots.add(slotKey)
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+  return options
+}
+
+/** "2025-06-10T17:00:00.000Z" → "2025-06-10T17" */
+function isoToSlotKey(iso) {
+  const d = new Date(iso)
+  return `${iso.substring(0, 10)}T${String(d.getUTCHours()).padStart(2, '0')}`
 }
 
 // ── Failure notification ─────────────────────────────────────────────────────

@@ -23,10 +23,19 @@ OUTPUT FORMAT — return ONLY this JSON object, no markdown, no explanation:
   "keywords": string[] (10-15 high-value terms grouped by funnel stage — ONLY include this field if the task type is keyword_research),
   "posting_strategy": {
     "platform_windows": {
-      "<platform>": number[]  (UTC hours ordered by priority — include all platforms relevant to this product; e.g. "instagram": [12, 17, 20])
+      "<platform>": [
+        { "day": string, "utc_hour": number }
+      ]
+      Each entry is a specific recommended posting slot: "day" is the lowercase day of the week
+      ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday") and
+      "utc_hour" is the hour in UTC (0-23). List at least 5-7 slots per platform, ordered by
+      priority (best slot first). Multiple entries for the same day are valid and expected when
+      engagement peaks at two distinct times (e.g. mid-morning and evening on Tuesday both
+      being strong). The scheduler will book posts into these exact slots in priority order.
+      Example: [{"day":"tuesday","utc_hour":17},{"day":"thursday","utc_hour":12},{"day":"tuesday","utc_hour":20},{"day":"saturday","utc_hour":17}]
     },
     "frequency_recommendation": string (posts per platform per week — be specific, e.g. "Instagram: 4-5x/week, LinkedIn: 2-3x/week"),
-    "rationale": string (2-3 sentences explaining timing choices based on search findings — note signal strength)
+    "rationale": string (2-3 sentences explaining the day and time choices based on search findings — note signal strength and why specific days outperform others for this audience)
   }
 }
 
