@@ -15,6 +15,9 @@ const ASPECT_HINT = {
   google_ads: '16:9 landscape',
 }
 
+const MAX_ATTEMPTS = 2        // 1 auto-retry on transient failure
+const RETRY_DELAY_MS = 3_000  // 3 s before retry
+
 function apiKey() {
   const key = process.env.NANO_BANANA_API_KEY
   if (!key) throw new Error('NANO_BANANA_API_KEY is not set')
@@ -23,11 +26,18 @@ function apiKey() {
 
 /**
  * Generate an image via the Gemini image generation API.
- * Optionally pass referenceImageBuffer (Buffer) to include a reference screenshot.
- * Returns { imageBuffer } — a Buffer ready for Supabase upload.
+ * Automatically retries once on failure (network errors, transient 5xx).
+ * Throws on final failure — callers must handle.
+ *
+ * @param {object}  opts
+ * @param {string}  opts.prompt
+ * @param {string}  [opts.model]
+ * @param {string}  [opts.platform]
+ * @param {Buffer}  [opts.referenceImageBuffer]
+ * @returns {{ imageBuffer: Buffer }}
  */
 export async function generateImage({ prompt, model = MODELS.FAST, platform = null, referenceImageBuffer = null }) {
-  const ratio = ASPECT_HINT[platform?.toLowerCase()] ?? '1:1 square'
+  const ratio      = ASPECT_HINT[platform?.toLowerCase()] ?? '1:1 square'
   const fullPrompt = `${prompt} Compose as a ${ratio} image.`
 
   const parts = [{ text: fullPrompt }]
@@ -41,29 +51,42 @@ export async function generateImage({ prompt, model = MODELS.FAST, platform = nu
     })
   }
 
-  const res = await fetch(
-    `${BASE_URL}/models/${model}:generateContent?key=${apiKey()}`,
-    {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: { responseModalities: ['IMAGE'] },
-      }),
-    }
-  )
+  let lastError
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(
+        `${BASE_URL}/models/${model}:generateContent?key=${apiKey()}`,
+        {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: { responseModalities: ['IMAGE'] },
+          }),
+        }
+      )
 
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Gemini image error ${res.status}: ${body}`)
+      if (!res.ok) {
+        const body = await res.text()
+        throw new Error(`Gemini image error ${res.status}: ${body}`)
+      }
+
+      const data = await res.json()
+      const part = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData)
+      if (!part) throw new Error(`No image in response: ${JSON.stringify(data).substring(0, 300)}`)
+
+      const b64 = part.inlineData.data.replace(/^data:image\/\w+;base64,/, '')
+      return { imageBuffer: Buffer.from(b64, 'base64') }
+    } catch (err) {
+      lastError = err
+      if (attempt < MAX_ATTEMPTS) {
+        console.warn(`[nanobanana] Attempt ${attempt} failed: ${err.message} — retrying in ${RETRY_DELAY_MS / 1000}s`)
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS))
+      }
+    }
   }
 
-  const data = await res.json()
-  const part = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData)
-  if (!part) throw new Error(`No image in response: ${JSON.stringify(data).substring(0, 300)}`)
-
-  const b64 = part.inlineData.data.replace(/^data:image\/\w+;base64,/, '')
-  return { imageBuffer: Buffer.from(b64, 'base64') }
+  throw new Error(`Image generation failed after ${MAX_ATTEMPTS} attempts: ${lastError.message}`)
 }
 
 export function selectModel(metadata = {}) {

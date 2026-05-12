@@ -18,8 +18,13 @@ const SCREENSHOT_KEYWORDS = {
 /**
  * Generates an image for a content item, optionally using a Crevaxo
  * reference screenshot from the reference-screenshots bucket.
- * Returns the content item enriched with image data, or null on failure.
- * Never posts to Slack — the Orchestrator handles all Slack output.
+ *
+ * Image generation is retried automatically (see nanobanana.js).
+ * If all attempts fail, a Slack notification is sent and the item is
+ * returned with imageUrl = null and imageGenerationFailed = true so the
+ * Orchestrator can post a text-only approval card with a clear warning.
+ *
+ * Never posts the approval card itself — the Orchestrator handles all Slack output.
  */
 export async function runDesignerAgent({ contentItem, campaignId, campaignName, channelId, slackClient, notifySlack = true }) {
   console.log(`[designer-agent] Generating image for content ${contentItem.id} on ${contentItem.platform}`)
@@ -32,9 +37,11 @@ export async function runDesignerAgent({ contentItem, campaignId, campaignName, 
 
   const prompt = buildImagePrompt(contentItem)
 
-  let publicUrl = null
+  let publicUrl            = null
+  let imageGenerationFailed = false
 
   try {
+    // generateImage retries internally — throws only after all attempts exhausted
     const { imageBuffer } = await generateImage({
       prompt,
       model,
@@ -87,14 +94,42 @@ export async function runDesignerAgent({ contentItem, campaignId, campaignName, 
     contentItem = { ...contentItem, metadata: updatedMetadata }
     console.log(`[designer-agent] Image uploaded: ${storagePath}`)
   } catch (err) {
-    console.error(`[designer-agent] Image generation failed: ${err.message}`)
+    imageGenerationFailed = true
+    console.error(`[designer-agent] Image generation failed for ${contentItem.id}: ${err.message}`)
+
+    // Mark failure in content_log metadata so it's visible in the DB
+    await supabase
+      .from('content_log')
+      .update({
+        metadata: {
+          ...contentItem.metadata,
+          image_generation_failed:       true,
+          image_generation_error:        err.message,
+          image_generation_failed_at:    new Date().toISOString(),
+        },
+      })
+      .eq('id', contentItem.id)
+
+    // Notify the Slack channel so the team knows image gen failed
+    if (slackClient && channelId) {
+      try {
+        await slackClient.chat.postMessage({
+          channel: channelId,
+          text:    `⚠️ Image generation failed for a ${platform ?? 'social'} post — the approval card below will be text-only. You can approve the copy as-is or regenerate.\n\n*Error:* ${err.message}\n*Content ID:* \`${contentItem.id}\``,
+        })
+      } catch (slackErr) {
+        console.error(`[designer-agent] Failed to send Slack failure notice: ${slackErr.message}`)
+      }
+    }
   }
 
-  // Return enriched item — Orchestrator decides what to post to Slack
+  // Return enriched item — Orchestrator decides what to post to Slack.
+  // imageGenerationFailed flag lets the Orchestrator annotate the approval card.
   return {
     ...contentItem,
-    imageUrl:            publicUrl,
-    referenceScreenshot: refName ?? null,
+    imageUrl:             publicUrl,
+    referenceScreenshot:  refName ?? null,
+    imageGenerationFailed,
   }
 }
 

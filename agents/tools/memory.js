@@ -103,7 +103,8 @@ export async function savePostingStrategy(campaignId, postingStrategy) {
 
 /**
  * Retrieve the posting_strategy stored against a campaign.
- * Returns null if the campaign doesn't exist or has no strategy.
+ * Returns null if the campaign doesn't exist, has no strategy, or the
+ * posting_strategy column is missing (migration not yet run).
  */
 export async function getCampaignPostingStrategy(campaignId) {
   if (!campaignId) return null
@@ -112,8 +113,16 @@ export async function getCampaignPostingStrategy(campaignId) {
     .select('posting_strategy')
     .eq('id', campaignId)
     .single()
-  if (error) return null
-  return data?.posting_strategy ?? null
+  if (error) {
+    // PGRST116 = row not found; any other code likely means the column is missing
+    if (error.code !== 'PGRST116') {
+      console.error(`[memory] getCampaignPostingStrategy error (campaign ${campaignId}): ${error.code} ${error.message} — has the posting_strategy migration been run?`)
+    }
+    return null
+  }
+  const strategy = data?.posting_strategy ?? null
+  if (!strategy) console.warn(`[memory] No posting_strategy found for campaign ${campaignId}`)
+  return strategy
 }
 
 export async function promoteToAssetLibrary(contentId) {
