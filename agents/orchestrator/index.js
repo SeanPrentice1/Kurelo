@@ -1,7 +1,8 @@
 import { buildMemoryContext, formatMemoryContext } from '../tools/memory.js'
-import { planBlocks, campaignSummaryBlocks, approvalBlocks, imageApprovalBlocks } from '../tools/slack.js'
+import { planBlocks, campaignSummaryBlocks, approvalBlocks, imageApprovalBlocks, reelBriefBlocks } from '../tools/slack.js'
 import supabase from '../tools/supabase.js'
 import { runMarketingDirector } from '../directors/marketing-director/index.js'
+import { registerReelThread } from '../tools/reel-state.js'
 
 /**
  * Tier 1 — Orchestrator
@@ -101,6 +102,32 @@ async function postApprovalCard({ item, campaignName, channelId, slackClient }) 
   const contentItem = item.id ? item : item.contentItem ?? item
   const imageUrl    = item.imageUrl ?? contentItem.metadata?.image_url ?? null
   const refScreenshot = item.referenceScreenshot ?? contentItem.metadata?.reference_screenshot ?? null
+
+  // Reel briefs get a production-required card — no approve/reject buttons
+  if (contentItem.asset_status === 'production_required' || contentItem.content_type === 'reel') {
+    const meta = contentItem.metadata ?? {}
+    const blocks = reelBriefBlocks({
+      contentId:    contentItem.id,
+      campaignName,
+      platform:     contentItem.platform,
+      hook:         meta.hook     ?? '',
+      scene:        meta.scene    ?? '',
+      duration:     meta.duration ?? '',
+      caption:      meta.caption  ?? contentItem.output ?? '',
+    })
+    const msg = await slackClient.chat.postMessage({
+      channel: channelId,
+      text:    `🎬 Reel brief ready — action required: ${contentItem.platform}`,
+      blocks,
+    })
+    await supabase
+      .from('content_log')
+      .update({ slack_ts: msg.ts })
+      .eq('id', contentItem.id)
+    // Register thread so bot captures the Screen Studio recording attachment
+    registerReelThread({ messageTs: msg.ts, contentId: contentItem.id, campaignId: contentItem.campaign_id, channelId })
+    return
+  }
 
   const sharedProps = {
     contentId:    contentItem.id,

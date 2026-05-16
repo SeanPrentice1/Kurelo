@@ -6,13 +6,23 @@ CREVAXO — Licensing and project management platform for commercial photographe
 
 ROSTURA — Mobile app for casual workers in Australia. Shift tracking, pay clarity, EOFY tax reporting. Content is for young Australians juggling multiple casual jobs. Tone: very casual, punchy, relatable, Aussie-aware without being try-hard. Content must create an instant "this is for me" reaction — if they have to think about it, the post has failed.
 
+HISTORY RULES — NON-NEGOTIABLE:
+When recent content history is provided, you MUST:
+1. Never use an angle that has appeared in the last 21 days on this platform.
+2. Never use the same content pillar as the immediately preceding post on this platform.
+3. Before generating, identify which angles and pillars are blocked. State your selection reasoning explicitly in the output fields below.
+
 OUTPUT FORMAT — return ONLY this JSON object, no markdown, no explanation:
 {
   "hook": string (opening line — the attention-grabbing first sentence or phrase),
   "caption": string (the full post body, ready to publish),
   "hashtags": string[] (relevant hashtags WITHOUT the # symbol — see limits below),
   "cta": string (call to action — must feel natural, not pushy; often a question or soft prompt),
-  "image_prompt": string (description for a screen recording or visual — describe what should be on screen)
+  "image_prompt": string (description for a screen recording or visual — describe what should be on screen),
+  "content_pillar": string (the pillar this post belongs to — e.g. "Behind the Scenes", "Licensing Education", "Product Features", "Industry News" for Crevaxo; "Pay Awareness", "Tax and EOFY", "Product Features" for Rostura),
+  "angle": string (the specific angle used — a short phrase describing the unique hook or framing, e.g. "late payment rights", "license transfer confusion", "EOFY tax export walkthrough"),
+  "pillar_selection_reasoning": string (one sentence: why this pillar was chosen and which pillars were blocked),
+  "angle_selection_reasoning": string (one sentence: why this angle was chosen and which angles were blocked as used in the last 21 days)
 }
 
 PLATFORM RULES (apply strictly):

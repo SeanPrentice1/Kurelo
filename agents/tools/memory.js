@@ -75,16 +75,43 @@ export function formatMemoryContext(memory) {
   return parts.join('\n')
 }
 
-export async function logDecision({ contentId, campaignId, decision, decidedBy, reason = null, slackPayload = null }) {
+export async function logDecision({ contentId, campaignId, decision, decidedBy, reason = null, slackPayload = null, rejectionType = null, revisionReason = null, revisionNumber = 0 }) {
   const { error } = await supabase.from('decisions_log').insert({
-    content_id:    contentId,
-    campaign_id:   campaignId ?? null,
+    content_id:     contentId,
+    campaign_id:    campaignId ?? null,
     decision,
-    decided_by:    decidedBy,
+    decided_by:     decidedBy,
     reason,
-    slack_payload: slackPayload,
+    slack_payload:  slackPayload,
+    rejection_type: rejectionType,
+    revision_reason: revisionReason,
+    revision_number: revisionNumber,
   })
   if (error) throw new Error(`Decision log failed: ${error.message}`)
+}
+
+/**
+ * Fetch recent content_log rows for a product+platform within the last N days.
+ * Used by content agent to avoid repeating angles and pillars.
+ */
+export async function getRecentContent(product, platform, days = 21) {
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+
+  const { data, error } = await supabase
+    .from('content_log')
+    .select('content_pillar, angle, output, created_at, status')
+    .eq('product', product)
+    .eq('platform', platform)
+    .gte('created_at', since.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(30)
+
+  if (error) {
+    console.warn(`[memory] getRecentContent failed: ${error.message}`)
+    return []
+  }
+  return data ?? []
 }
 
 /**

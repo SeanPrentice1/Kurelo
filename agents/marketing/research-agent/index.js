@@ -34,7 +34,9 @@ export async function runResearchAgent({ task, campaignId, campaignName, channel
   const parsed     = parseOutput(rawText)
   const outputText = formatReport(parsed)
 
-  console.log(`[research-agent] Done: ${task.type} (posting_strategy platforms: ${Object.keys(parsed.posting_strategy?.platform_windows ?? {}).join(', ') || 'none'})`)
+  const strategy = parsed.posting_strategy ?? null
+  const schedulingPlatforms = Object.keys(strategy?.platform_windows ?? {})
+  console.log(`[research-agent] Done: ${task.type} (posting_strategy platforms: ${schedulingPlatforms.join(', ') || 'none'})`)
 
   // Research is internal — not persisted to content_log (no approval needed)
   return {
@@ -42,7 +44,7 @@ export async function runResearchAgent({ task, campaignId, campaignName, channel
     task_type:        task.type,
     product,
     output:           outputText,
-    posting_strategy: parsed.posting_strategy ?? null,
+    posting_strategy: strategy,
     metadata: {
       summary:          parsed.summary         ?? '',
       key_findings:     parsed.key_findings    ?? [],
@@ -50,7 +52,7 @@ export async function runResearchAgent({ task, campaignId, campaignName, channel
       threats:          parsed.threats         ?? [],
       recommendations:  parsed.recommendations ?? [],
       keywords:         parsed.keywords        ?? [],
-      posting_strategy: parsed.posting_strategy ?? null,
+      posting_strategy: strategy,
     },
   }
 }

@@ -34,13 +34,12 @@ const DAY_OF_WEEK = {
  * Step 1 — Called immediately after content is approved.
  *
  * Fetches the campaign's research-backed posting_strategy. The strategy
- * contains an ordered list of recommended {day, utc_hour} slots per platform.
- * The scheduler works through those slots in priority order, skipping any
- * exact day+time combos already taken by another post.
+ * contains an ordered list of recommended {day, utc_hour} slots per platform,
+ * plus a rich scheduling object with primary_slot, alternative_slots, and avoid.
  *
- * Two posts on the same day at different hours are explicitly valid — the
- * research agent may recommend e.g. Tuesday 12:00 and Tuesday 17:00 as
- * independent high-engagement windows.
+ * Uses primary_slot as the default. Only deviates to alternative_slot if the
+ * primary is already taken. Never invents slots outside the strategy.
+ * Enforces a 24-hour minimum gap between posts on the same platform.
  *
  * A provisional scheduled_for is written back to content_log immediately
  * so that concurrent suggestSchedule calls for a multi-post campaign each
@@ -63,14 +62,18 @@ export async function suggestSchedule({ contentId, channelId, slackClient }) {
   if (item.status !== 'approved') return
 
   const postingStrategy = await getCampaignPostingStrategy(item.campaign_id)
+  const platformKey     = item.platform?.toLowerCase()
 
-  if (postingStrategy?.platform_windows?.[item.platform?.toLowerCase()]) {
+  if (postingStrategy?.platform_windows?.[platformKey]) {
     console.log(`[scheduler-agent] Using research-backed posting strategy for ${item.platform}`)
   } else {
     console.log(`[scheduler-agent] No strategy for ${item.platform} in campaign ${item.campaign_id} — using fallback`)
   }
 
-  const options = await buildScheduleOptions(item.platform, item.product, postingStrategy)
+  // Rich per-platform scheduling data (primary_slot, alternative_slots, avoid)
+  const richScheduling = postingStrategy?.scheduling?.[platformKey] ?? null
+
+  const options = await buildScheduleOptions(item.platform, item.product, postingStrategy, richScheduling)
 
   // Provisional reservation — write the first suggested slot back to content_log
   // so that other suggestSchedule calls in this campaign see it as taken.
@@ -92,10 +95,11 @@ export async function suggestSchedule({ contentId, channelId, slackClient }) {
     channel: channelId,
     text:    `📅 When should this ${PLATFORM_LABELS[item.platform] ?? item.platform} post go out?`,
     blocks:  scheduleOptionsBlocks({
-      contentId: item.id,
-      platform:  item.platform,
-      product:   item.product,
+      contentId:  item.id,
+      platform:   item.platform,
+      product:    item.product,
       options,
+      scheduling: richScheduling,
     }),
   })
 }
@@ -172,30 +176,21 @@ export async function executeSchedule({ contentId, scheduledAt, channelId, messa
 // ── Slot calculation ─────────────────────────────────────────────────────────
 
 /**
- * Returns 3 Date options driven entirely by the research agent's posting_strategy.
+ * Returns 3 Date options.
  *
- * The strategy supplies an ordered list of {day, utc_hour} slots per platform
- * (e.g. [{day:'tuesday',utc_hour:17},{day:'tuesday',utc_hour:20},{day:'thursday',utc_hour:12}]).
- * Starting from tomorrow, the scheduler walks forward day by day and checks
- * each calendar day against the strategy's recommendations for that day-of-week.
- * When a recommended slot is free it is offered; when it is taken (exact day+hour
- * collision) it is skipped and the next recommended slot is tried instead.
+ * When rich scheduling data is present (primary_slot + alternative_slots from
+ * the research agent), uses primary_slot first and only deviates to
+ * alternative_slots when the primary is taken. Never invents new slots.
  *
- * Two posts on the same day at different hours are explicitly valid — the
- * research agent decides whether that is appropriate for the audience.
+ * Falls back to platform_windows {day, utc_hour} list when rich scheduling
+ * is absent, and to a static fallback hour when neither is present.
  *
- * Falls back to a simple day-walk at the platform's prime hour when no
- * strategy is present (campaigns without a research task).
+ * Enforces a 24-hour minimum gap between posts on the same platform/product.
  */
-async function buildScheduleOptions(platform, product, postingStrategy) {
-  const platformKey  = platform?.toLowerCase()
-  const rawSlots     = postingStrategy?.platform_windows?.[platformKey]
+async function buildScheduleOptions(platform, product, postingStrategy, richScheduling) {
+  const platformKey = platform?.toLowerCase()
 
-  // Parse strategy slots into [{dayOfWeek: 0-6, utc_hour: 0-23}] in priority order
-  const strategySlots = parseStrategySlots(rawSlots)
-
-  // Fetch all content for this platform/product that already has a scheduled_for
-  // (covers confirmed, provisionally reserved, and legacy approved rows)
+  // Fetch all scheduled_for values for this platform/product (90-day window)
   const windowEnd = new Date()
   windowEnd.setDate(windowEnd.getDate() + 90)
 
@@ -209,52 +204,93 @@ async function buildScheduleOptions(platform, product, postingStrategy) {
     .gte('scheduled_for', new Date().toISOString())
     .lte('scheduled_for', windowEnd.toISOString())
 
-  // Taken slots keyed as "YYYY-MM-DDTHH" (day+hour precision so two posts on
-  // the same day at different times don't conflict with each other)
-  const takenSlots = new Set(
-    (existing ?? [])
-      .map(r => r.scheduled_for)
-      .filter(Boolean)
-      .map(isoToSlotKey)
-  )
+  const existingDates = (existing ?? [])
+    .map(r => r.scheduled_for)
+    .filter(Boolean)
+    .map(iso => new Date(iso))
 
-  if (strategySlots.length === 0) {
-    console.log(`[scheduler-agent] No strategy slots for ${platform} — using fallback hour`)
-    return buildFallbackOptions(platformKey, takenSlots)
+  // Slot taken check: exact day+hour collision (same key as before)
+  const takenSlots = new Set(existingDates.map(d => isoToSlotKey(d.toISOString())))
+
+  // 24-hour gap check: reject any candidate within 24h of an existing post
+  const tooClose = (candidate) =>
+    existingDates.some(d => Math.abs(candidate - d) < 24 * 60 * 60 * 1000)
+
+  // ── Strategy 1: Rich scheduling (primary_slot + alternative_slots) ──────────
+  if (richScheduling?.primary_slot) {
+    const slots = [richScheduling.primary_slot, ...(richScheduling.alternative_slots ?? [])]
+    const parsedRichSlots = slots.map(s => ({
+      dayOfWeek: DAY_OF_WEEK[s.day?.toLowerCase()],
+      utc_hour:  parseTimeUtc(s.time_utc),
+    })).filter(s => s.dayOfWeek !== undefined && s.utc_hour !== null)
+
+    if (parsedRichSlots.length > 0) {
+      const options = findSlotsFromSpec(parsedRichSlots, takenSlots, tooClose)
+      if (options.length > 0) {
+        console.log(`[scheduler-agent] Rich scheduling: ${options.map(d => d.toISOString()).join(' | ')}`)
+        return options
+      }
+    }
   }
 
-  console.log(`[scheduler-agent] Strategy has ${strategySlots.length} recommended slots for ${platform}`)
-  console.log(`[scheduler-agent] Already taken: ${[...takenSlots].join(', ') || 'none'}`)
+  // ── Strategy 2: platform_windows list ───────────────────────────────────────
+  const rawSlots     = postingStrategy?.platform_windows?.[platformKey]
+  const strategySlots = parseStrategySlots(rawSlots)
 
-  // Walk forward day by day from tomorrow, checking strategy recommendations
+  if (strategySlots.length > 0) {
+    console.log(`[scheduler-agent] Using platform_windows (${strategySlots.length} slots) for ${platform}`)
+    const options = findSlotsFromSpec(strategySlots, takenSlots, tooClose)
+    if (options.length > 0) {
+      console.log(`[scheduler-agent] Generated ${options.length} options: ${options.map(d => d.toISOString()).join(' | ')}`)
+      return options
+    }
+  }
+
+  // ── Strategy 3: static fallback ─────────────────────────────────────────────
+  console.log(`[scheduler-agent] No strategy slots for ${platform} — using fallback hour`)
+  return buildFallbackOptions(platformKey, takenSlots, tooClose)
+}
+
+/**
+ * Walk forward from tomorrow to find up to 3 free slots matching the spec list.
+ * Respects 24-hour minimum gap and exact slot collisions.
+ */
+function findSlotsFromSpec(specSlots, takenSlots, tooClose) {
   const options = []
   const cursor  = new Date()
   cursor.setUTCDate(cursor.getUTCDate() + 1)
   cursor.setUTCHours(0, 0, 0, 0)
+  const localTaken = new Set(takenSlots)
 
   for (let day = 0; day < 90 && options.length < 3; day++) {
     const curDayOfWeek = cursor.getUTCDay()
     const dateStr      = cursor.toISOString().substring(0, 10)
 
-    // Collect all strategy-recommended slots for this day of week, in priority order
-    for (const slot of strategySlots) {
+    for (const slot of specSlots) {
       if (options.length >= 3) break
       if (slot.dayOfWeek !== curDayOfWeek) continue
 
       const slotKey = `${dateStr}T${String(slot.utc_hour).padStart(2, '0')}`
-      if (!takenSlots.has(slotKey)) {
-        const d = new Date(cursor)
-        d.setUTCHours(slot.utc_hour, 0, 0, 0)
-        options.push(d)
-        takenSlots.add(slotKey) // prevent offering the same slot twice within this call
-      }
+      if (localTaken.has(slotKey)) continue
+
+      const candidate = new Date(cursor)
+      candidate.setUTCHours(slot.utc_hour, 0, 0, 0)
+      if (tooClose(candidate)) continue
+
+      options.push(candidate)
+      localTaken.add(slotKey)
     }
 
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
-
-  console.log(`[scheduler-agent] Generated ${options.length} options: ${options.map(d => d.toISOString()).join(' | ')}`)
   return options
+}
+
+/** Parse "09:00" → 9 */
+function parseTimeUtc(timeStr) {
+  if (!timeStr) return null
+  const [h] = timeStr.split(':').map(Number)
+  return isNaN(h) ? null : h
 }
 
 /**
@@ -279,22 +315,23 @@ function parseStrategySlots(rawSlots) {
 
 /**
  * Fallback when no strategy is available. Offers 3 upcoming days at the
- * platform's prime hour, skipping exact day+hour collisions.
+ * platform's prime hour, skipping exact collisions and 24h gaps.
  */
-function buildFallbackOptions(platformKey, takenSlots) {
+function buildFallbackOptions(platformKey, takenSlots, tooClose) {
   const hour    = FALLBACK_HOUR[platformKey] ?? 14
   const options = []
   const cursor  = new Date()
   cursor.setUTCDate(cursor.getUTCDate() + 1)
+  const localTaken = new Set(takenSlots)
 
   while (options.length < 3) {
     const dateStr = cursor.toISOString().substring(0, 10)
     const slotKey = `${dateStr}T${String(hour).padStart(2, '0')}`
-    if (!takenSlots.has(slotKey)) {
-      const d = new Date(cursor)
-      d.setUTCHours(hour, 0, 0, 0)
-      options.push(d)
-      takenSlots.add(slotKey)
+    const candidate = new Date(cursor)
+    candidate.setUTCHours(hour, 0, 0, 0)
+    if (!localTaken.has(slotKey) && !tooClose(candidate)) {
+      options.push(candidate)
+      localTaken.add(slotKey)
     }
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
