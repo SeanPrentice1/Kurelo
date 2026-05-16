@@ -1,7 +1,10 @@
 import 'dotenv/config'
 import { createSlackApp } from './slack-bot/index.js'
+import { backfillPerformanceData } from './marketing/analytics-agent/index.js'
 
 const PORT = parseInt(process.env.PORT || '3000', 10)
+// Check for posts needing performance data every hour
+const PERF_CHECK_INTERVAL_MS = 60 * 60 * 1000
 
 async function main() {
   const { app, start } = createSlackApp()
@@ -13,6 +16,12 @@ async function main() {
 
   await start(PORT)
   console.log(`⚡ Kurelo Agents running on port ${PORT}`)
+
+  // Backfill performance data for posts older than 48h
+  backfillPerformanceData().catch(err => console.error('[server] Initial backfill error:', err.message))
+  setInterval(() => {
+    backfillPerformanceData().catch(err => console.error('[server] Backfill error:', err.message))
+  }, PERF_CHECK_INTERVAL_MS)
 
   process.on('SIGTERM', async () => {
     console.log('SIGTERM received — shutting down')

@@ -5,6 +5,7 @@ import { runAdsAgent }       from '../../marketing/ads-agent/index.js'
 import { runResearchAgent }  from '../../marketing/research-agent/index.js'
 import { runAnalyticsAgent } from '../../marketing/analytics-agent/index.js'
 import { runDesignerAgent }  from '../../marketing/designer-agent/index.js'
+import { runReelHandler }    from '../../marketing/reel-handler/index.js'
 import { savePostingStrategy } from '../../tools/memory.js'
 
 const AGENT_RUNNERS = {
@@ -147,6 +148,12 @@ async function executeTasks({ tasks, product, campaignId, campaignName, channelI
 }
 
 async function runTask({ task, campaignId, campaignName, channelId, slackClient, outputs }) {
+  // Reels bypass the standard content agent and go to the reel handler
+  if (task.agent === 'content' && task.content_type === 'reel') {
+    const item = await runReelHandler({ task, campaignId, campaignName, channelId, slackClient })
+    return { item, designerResult: null }
+  }
+
   const runner = AGENT_RUNNERS[task.agent]
   if (!runner) {
     console.warn(`[marketing-director] No runner for agent: ${task.agent}`)
@@ -167,6 +174,11 @@ async function runTask({ task, campaignId, campaignName, channelId, slackClient,
     dependencyContext,
     notifySlack: false,
   })
+
+  // Reels skip designer and go directly to reel handler
+  if (task.agent === 'content' && task.content_type === 'reel') {
+    return { item, designerResult: null }
+  }
 
   // For visual content platforms, run the designer agent after content
   let designerResult = null

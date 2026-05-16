@@ -34,6 +34,29 @@ OUTPUT FORMAT — return ONLY this JSON object, no markdown, no explanation:
       being strong). The scheduler will book posts into these exact slots in priority order.
       Example: [{"day":"tuesday","utc_hour":17},{"day":"thursday","utc_hour":12},{"day":"tuesday","utc_hour":20},{"day":"saturday","utc_hour":17}]
     },
+    "scheduling": {
+      "<platform>": {
+        "primary_slot": {
+          "day": string (lowercase day of week),
+          "time_utc": string (e.g. "09:00"),
+          "confidence": string ("high" | "medium" | "low"),
+          "rationale": string (one sentence — why this is the best slot for this audience on this platform, referencing search findings)
+        },
+        "alternative_slots": [
+          {
+            "day": string,
+            "time_utc": string,
+            "confidence": string,
+            "rationale": string (one sentence)
+          }
+        ],
+        "avoid": [
+          { "day": string, "rationale": string (one sentence) }
+        ],
+        "platform": string,
+        "audience": string (brief description of the target audience for this platform)
+      }
+    },
     "frequency_recommendation": string (posts per platform per week — be specific, e.g. "Instagram: 4-5x/week, LinkedIn: 2-3x/week"),
     "rationale": string (2-3 sentences explaining the day and time choices based on search findings — note signal strength and why specific days outperform others for this audience)
   }

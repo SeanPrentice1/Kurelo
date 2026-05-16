@@ -227,8 +227,8 @@ export function campaignSummaryBlocks({ campaignName, product, summary, research
 
 /** Replace an approval message with a resolved state */
 export function resolvedBlocks({ decision, decidedBy, output, agent, taskType }) {
-  const emoji = decision === 'approved' ? '✅' : '❌'
-  const label = decision === 'approved' ? 'Approved' : 'Rejected'
+  const emoji = decision === 'approved' ? '✅' : decision === 'revise' ? '📝' : '🗑️'
+  const label = decision === 'approved' ? 'Approved' : decision === 'revise' ? 'Revise requested' : 'Discarded'
   const agentEmoji = AGENT_EMOJIS[agent] ?? ''
   const preview = output.substring(0, 280) + (output.length > 280 ? '...' : '')
 
@@ -246,13 +246,17 @@ export function resolvedBlocks({ decision, decidedBy, output, agent, taskType })
 /**
  * Schedule suggestion card posted after content approval.
  * Each option button encodes contentId + ISO date as the action value.
- * @param {object} opts
+ * @param {object}   opts
  * @param {string}   opts.contentId
  * @param {string}   opts.platform
  * @param {string}   opts.product
- * @param {Date[]}   opts.options    - 3 suggested Date objects
+ * @param {Date[]}   opts.options           - 3 suggested Date objects (primary first)
+ * @param {object}   [opts.scheduling]      - Rich scheduling data from research agent
+ * @param {string}   [opts.scheduling.primary_slot.rationale]
+ * @param {object[]} [opts.scheduling.alternative_slots]
+ * @param {object[]} [opts.scheduling.avoid]
  */
-export function scheduleOptionsBlocks({ contentId, platform, product, options }) {
+export function scheduleOptionsBlocks({ contentId, platform, product, options, scheduling }) {
   const platLabel = PLATFORM_LABELS[platform?.toLowerCase()] ?? platform ?? 'post'
   const productBadge = product === 'crevaxo' ? '🟠 Crevaxo' : '🟣 Rostura'
 
@@ -271,7 +275,7 @@ export function scheduleOptionsBlocks({ contentId, platform, product, options })
     value:     `${contentId}|${date.toISOString()}`,
   })
 
-  return [
+  const blocks = [
     {
       type: 'section',
       text: {
@@ -279,21 +283,96 @@ export function scheduleOptionsBlocks({ contentId, platform, product, options })
         text: `📅 *When should this ${platLabel} post go out?*\n${productBadge} — pick a slot or choose an alternative.`,
       },
     },
+  ]
+
+  // Primary slot with rationale
+  const primaryRationale = scheduling?.primary_slot?.rationale
+  blocks.push({
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `*Recommended:* ${formatOption(options[0])}${primaryRationale ? `\n_${primaryRationale}_` : ''}`,
+    },
+  })
+
+  // Avoid days
+  if (scheduling?.avoid?.length) {
+    const avoidText = scheduling.avoid.map(a => `${a.day} — ${a.rationale}`).join(', ')
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: `⛔ Avoid: ${avoidText}` }],
+    })
+  }
+
+  blocks.push({
+    type: 'actions',
+    elements: [
+      makeButton(options[0], '✅ Confirm recommended', 0, 'primary'),
+      ...(options[1] ? [makeButton(options[1], `📅 Alt 1: ${formatOption(options[1])}`, 1)] : []),
+      ...(options[2] ? [makeButton(options[2], `📅 Alt 2: ${formatOption(options[2])}`, 2)] : []),
+    ],
+  })
+
+  // Alternative rationales
+  const altSlots = scheduling?.alternative_slots ?? []
+  if (altSlots.length) {
+    const altText = altSlots.slice(0, 2).map((a, i) => `Alt ${i + 1}: ${a.day} ${a.time_utc} UTC — ${a.rationale}`).join('\n')
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: altText }],
+    })
+  }
+
+  blocks.push({
+    type: 'context',
+    elements: [{ type: 'mrkdwn', text: '_Choosing a slot commits the post to Zernio. You can still edit it there before it publishes._' }],
+  })
+
+  return blocks
+}
+
+/**
+ * Reel brief card — no approve/reject buttons until recording is attached.
+ */
+export function reelBriefBlocks({ contentId, campaignName, platform, hook, scene, duration, caption }) {
+  return [
     {
-      type: 'section',
-      text: { type: 'mrkdwn', text: `*Suggested:* ${formatOption(options[0])}` },
+      type: 'header',
+      text: { type: 'plain_text', text: `🎬 REEL BRIEF READY - Action Required`, emoji: true },
     },
     {
-      type: 'actions',
-      elements: [
-        makeButton(options[0], '✅ Confirm suggested', 0, 'primary'),
-        ...(options[1] ? [makeButton(options[1], `📅 ${formatOption(options[1])}`, 1)] : []),
-        ...(options[2] ? [makeButton(options[2], `📅 ${formatOption(options[2])}`, 2)] : []),
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Campaign:*\n${campaignName}` },
+        { type: 'mrkdwn', text: `*Platform:*\n${platformLabel(platform)}` },
       ],
     },
     {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `⚠️ This post requires a screen recording. Ryven cannot generate video assets at this time.`,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Hook:*\n${hook}` },
+        { type: 'mrkdwn', text: `*Duration:*\n${duration}` },
+      ],
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Scene:*\n${scene}` },
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Caption:*\n${caption}` },
+    },
+    { type: 'divider' },
+    {
       type: 'context',
-      elements: [{ type: 'mrkdwn', text: '_Choosing a slot commits the post to Zernio. You can still edit it there before it publishes._' }],
+      elements: [{ type: 'mrkdwn', text: `📎 Reply to this thread with your Screen Studio recording attached. Content ID: \`${contentId}\`` }],
     },
   ]
 }
@@ -331,9 +410,15 @@ function actionButtons(contentId) {
       },
       {
         type:      'button',
-        text:      { type: 'plain_text', text: '❌ Reject', emoji: true },
+        text:      { type: 'plain_text', text: '📝 Revise', emoji: true },
+        action_id: 'revise_content',
+        value:     contentId,
+      },
+      {
+        type:      'button',
+        text:      { type: 'plain_text', text: '🗑️ Discard', emoji: true },
         style:     'danger',
-        action_id: 'reject_content',
+        action_id: 'discard_content',
         value:     contentId,
       },
     ],

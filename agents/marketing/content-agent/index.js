@@ -1,14 +1,19 @@
 import { anthropic, MODELS } from '../../tools/anthropic.js'
-import { buildMemoryContext } from '../../tools/memory.js'
+import { buildMemoryContext, getRecentContent } from '../../tools/memory.js'
 import { CONTENT_SYSTEM_PROMPT } from '../../prompts/content.js'
 import supabase from '../../tools/supabase.js'
 
-export async function runContentAgent({ task, campaignId, campaignName, channelId, slackClient, dependencyContext = [], notifySlack = true }) {
+export async function runContentAgent({ task, campaignId, campaignName, channelId, slackClient, dependencyContext = [], notifySlack = true, revisionContext = null }) {
   const { product, platform, description, params = {} } = task
   console.log(`[content-agent] Running: ${task.type} / ${platform} for ${product}`)
 
-  const memory = await buildMemoryContext(product, platform)
-  const userMessage = buildPrompt({ product, platform, description, params, memory, dependencyContext })
+  // Query content_log for last 21 days before every generation
+  const [memory, recentContent] = await Promise.all([
+    buildMemoryContext(product, platform),
+    getRecentContent(product, platform, 21),
+  ])
+
+  const userMessage = buildPrompt({ product, platform, description, params, memory, dependencyContext, recentContent, revisionContext })
 
   const response = await anthropic.messages.create({
     model:      MODELS.CONTENT,
@@ -28,13 +33,17 @@ export async function runContentAgent({ task, campaignId, campaignName, channelI
   const { data: item, error } = await supabase
     .from('content_log')
     .insert({
-      campaign_id:   campaignId,
+      campaign_id:                campaignId,
       product,
-      agent:         'content',
-      task_type:     task.type,
+      agent:                      'content',
+      task_type:                  task.type,
       platform,
-      content_type:  'caption',
-      output:        parsed.caption ?? parsed.text ?? response.content[0].text,
+      content_type:               'caption',
+      output:                     parsed.caption ?? parsed.text ?? response.content[0].text,
+      content_pillar:             parsed.content_pillar             ?? null,
+      angle:                      parsed.angle                      ?? null,
+      pillar_selection_reasoning: parsed.pillar_selection_reasoning ?? null,
+      angle_selection_reasoning:  parsed.angle_selection_reasoning  ?? null,
       metadata: {
         hook:         parsed.hook         ?? '',
         hashtags:     parsed.hashtags     ?? [],
@@ -49,11 +58,11 @@ export async function runContentAgent({ task, campaignId, campaignName, channelI
 
   if (error) throw new Error(`content_log insert failed: ${error.message}`)
 
-  console.log(`[content-agent] Done: ${item.id}`)
+  console.log(`[content-agent] Done: ${item.id} (pillar: ${item.content_pillar}, angle: ${item.angle})`)
   return item
 }
 
-function buildPrompt({ product, platform, description, params, memory, dependencyContext }) {
+function buildPrompt({ product, platform, description, params, memory, dependencyContext, recentContent, revisionContext }) {
   const parts = [
     `Product: ${product}`,
     `Platform: ${platform ?? 'general'}`,
@@ -62,6 +71,31 @@ function buildPrompt({ product, platform, description, params, memory, dependenc
 
   if (params && Object.keys(params).length) {
     parts.push(`\nParameters:\n${JSON.stringify(params, null, 2)}`)
+  }
+
+  if (revisionContext) {
+    parts.push(`\nREVISION REQUEST — this is a revision of a previously rejected post. Address the feedback specifically:\nFeedback: ${revisionContext.reason}`)
+    if (revisionContext.originalCopy) {
+      parts.push(`Previous copy (do not reuse):\n${revisionContext.originalCopy.substring(0, 400)}`)
+    }
+  }
+
+  // Recent content history — drives angle/pillar deduplication
+  if (recentContent?.length) {
+    parts.push('\nRecent content history for this platform (last 21 days) — do NOT repeat these angles or use the same pillar as the most recent post:')
+    const lastPost = recentContent[0]
+    if (lastPost?.content_pillar) parts.push(`Most recent pillar (BLOCKED for this post): ${lastPost.content_pillar}`)
+    const usedAngles = recentContent.filter(r => r.angle).map(r => r.angle)
+    if (usedAngles.length) parts.push(`Blocked angles (used in last 21 days): ${usedAngles.join(', ')}`)
+    // Include recent performance data if present
+    const withPerf = recentContent.filter(r => r.performance_data && Object.keys(r.performance_data).length > 0)
+    if (withPerf.length) {
+      parts.push('\nRecent performance signals:')
+      for (const r of withPerf.slice(0, 5)) {
+        const p = r.performance_data
+        parts.push(`- [${r.content_pillar ?? ''}/${r.angle ?? ''}] engagement: ${p.engagement_rate ?? '?'}%, reach: ${p.reach ?? '?'}, likes: ${p.likes ?? '?'}`)
+      }
+    }
   }
 
   if (memory.brand?.length) {
